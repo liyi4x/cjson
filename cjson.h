@@ -2,12 +2,14 @@
 #define _CJSON_H_
 
 #include <stdint.h>
+#include <stddef.h>
 
 typedef enum{
     CJSON_OK,
     CJSON_ERR_LITERAL,
     CJSON_ERR_NUMBER,
-    CJSON_ERR_STRING
+    CJSON_ERR_STRING,
+    CJSON_ERR_STACK
 }CJSON_STATUS;
 
 typedef enum{
@@ -27,8 +29,8 @@ typedef struct
     {
         double num;
         struct {
-            char *p;
-            uint16_t l;
+            char *buf;
+            size_t l;
         }str;
     }u;
 }cjson_value;
@@ -36,7 +38,18 @@ typedef struct
 
 
 CJSON_STATUS cjson_parse(cjson_value *v, const char *json);
+
 cjson_type cjson_get_type(cjson_value value);
+
+int cjson_get_boolean(cjson_value value);
+void cjson_set_boolean(cjson_value *value, int bool);
+
 double cjson_get_number(cjson_value value);
+void cjson_set_number(cjson_value *value, double num);
+
+size_t cjson_get_string_length(cjson_value value);
+char* cjson_get_string(cjson_value value);
+void cjson_set_string(cjson_value *value, const char *buf, size_t len);
+
 
 #endif
