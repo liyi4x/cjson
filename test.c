@@ -156,8 +156,9 @@ void main()
   test_string();
   test_array();
   
+  // TEST_JSON_NUMBER(-1.5, "-1.5");
   //   cjson_value v = {0};
-  // printf("$$$$$$$$$$$$$$  %d", cjson_parse(&v, "[false ,  null , true , 123 , \"abc\" ]"));
+  // printf("$$$$$$$$$$$$$$  %d", cjson_parse(&v, "[  123 ]"));
 
   printf("\n===================== result =====================\n");
   printf("  test all %d, pass: %d\n", test_count, test_count_pass);

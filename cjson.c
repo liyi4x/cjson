@@ -90,9 +90,7 @@ static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const 
       return CJSON_ERR_LITERAL;
   }while(expect[++i]);
   
-
   v->type = type;
-  v->u.num = 0;
   
   c->json = p;
 
@@ -102,9 +100,12 @@ static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const 
 static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
 {
   const char *p = c->json;
+  // char ch = *p;
 
   if(*p == '-')
     p++;
+    // ch = *(++p);  //指针运算，*运算优先级低于 p++，因此先自增，再解指针，*p++先取p值，解指针，p再自增
+                    //https://blog.csdn.net/weixin_41413441/article/details/80849827
 
   if(*p == '0')
     p++;
@@ -112,11 +113,8 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
   {
     if(!IS0TO9(*p))
       return CJSON_ERR_NUMBER;
-    // while(IS0TO9(*p++));         //bug
-
-    char ch = *p;
-    while(IS0TO9(ch))
-      ch = *p++;
+    // while(IS0TO9(*p++));       //bug //这里IS0TO9()宏中如果有自增的话会自增两次，宏定义的原因
+    for(p++; IS0TO9(*p); p++);  //第一个表达式的作用是跳过当前字符，因为在上面if语句中已经判断一次了
   }
 
   if(*p == '.')
@@ -124,7 +122,7 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
     p++;
     if(!IS0TO9(*p))
       return CJSON_ERR_NUMBER;
-    while(IS0TO9(*p++));
+    for(p++; IS0TO9(*p); p++);
   }
 
   if(*p == 'e' || *p == 'E')
@@ -134,7 +132,7 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
       p++;
     if(!IS0TO9(*p))
       return CJSON_ERR_NUMBER;
-    while(IS0TO9(*p++));
+    for(p++; IS0TO9(*p); p++);
   }
 
   v->u.num = strtod(c->json, NULL);
@@ -148,22 +146,22 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
 
 static CJSON_STATUS cjson_parse_4hex(const char *p, uint16_t *hex)
 {
-  assert(p != NULL && (p+1) != NULL && (p+2) != NULL && (p+3) != NULL);
+  assert(p != NULL);
   assert(hex != NULL);
 
   *hex = 0;
-  for(int i = 0; i < 4; i++)
+  for(char i = 0; i < 4; i++)
   {
-    char ch = *p++;
-    *hex <<= 4;
-    if(IS0TO9(ch))
-      *hex |= ch - '0';
-    else if(ch >= 'a' && ch <= 'f')
-      *hex |= ch - 'a' + 10;
-    else if(ch >= 'A' && ch <= 'F')
-      *hex |= ch - 'A' + 10;
+    *hex <<= 4;   //这个必须放在前面，如果放在if后边，最后一次填满16位，又移位，会丢数据
+    if(IS0TO9(*p))
+      *hex |= *p - '0';
+    else if(*p >= 'a' && *p <= 'f')
+      *hex |= *p - 'a' + 10;
+    else if(*p >= 'A' && *p <= 'F')
+      *hex |= *p - 'A' + 10;
     else
       return CJSON_ERR_UNICODE_HEX;
+    p++;
   }
 
   return CJSON_OK;
@@ -277,12 +275,11 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
   cjson_value value = {0};
   v->type = CJSON_ARRAY;
 
-  c->json++;  //跳过 [
+  c->json++;  //跳过 '['
+  cjson_parse_skip_space(c);
 
-  while(*c->json != ']')
+  while(1)
   {
-    cjson_parse_skip_space(c);
-
     if(cjson_parse_value(c, &value) == CJSON_OK)    //bug
     {
       v->u.arr.size++;
@@ -292,11 +289,17 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 
     cjson_parse_skip_space(c);
 
-    if(*c->json != ',' && *c->json != ']')
-      return CJSON_ERR_ARRAY;
-    
     if(*c->json == ',')
+    {
       c->json++;
+      cjson_parse_skip_space(c);
+      if(*c->json == '\0' || *c->json == ']')    //这个检测目前还有BUG
+        return CJSON_ERR_ARRAY_END_WITH_COMMA;
+    }
+    else if(*c->json == ']')
+      break;
+    else
+      return CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET;
   }
   return CJSON_OK;
 }
@@ -304,6 +307,7 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
 {
   CJSON_STATUS ret;
+
   switch (*(c->json))
   {
     case 'n':  ret = cjson_parse_literal(c, v, "null", CJSON_NULL);   break;
