@@ -75,16 +75,26 @@ static void cjson_parse_skip_space(cjson_context *c)
 
 static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const char* expect, cjson_type type)   //解析文字
 {
-  char i;
+  char i = 0;
   const char *p = c->json;
 
-  for(i = 0; expect[i+1]; i++)
+  // for(i = 0; expect[i+1]; i++)   //这里for这么写的化，最后一个字符不比较，有bug
+  // {
+  //   if(*p++ != expect[i])
+  //     return CJSON_ERR_LITERAL;
+  // }
+
+  do
   {
-    if(p[i] != expect[i])
+    if(*p++ != expect[i])
       return CJSON_ERR_LITERAL;
-  }
+  }while(expect[++i]);
+  
+
   v->type = type;
   v->u.num = 0;
+  
+  c->json = p;
 
   return CJSON_OK;
 }
@@ -102,7 +112,11 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
   {
     if(!IS0TO9(*p))
       return CJSON_ERR_NUMBER;
-    while(IS0TO9(*p++));
+    // while(IS0TO9(*p++));         //bug
+
+    char ch = *p;
+    while(IS0TO9(ch))
+      ch = *p++;
   }
 
   if(*p == '.')
@@ -125,6 +139,8 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
 
   v->u.num = strtod(c->json, NULL);
   v->type = CJSON_NUMBER;
+
+  c->json = p;
 
   return CJSON_OK;
 }
@@ -253,6 +269,54 @@ static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
   }
 }
 
+static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v);
+
+static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
+{
+  const char * p = c->json;
+  cjson_value value = {0};
+  v->type = CJSON_ARRAY;
+
+  c->json++;  //跳过 [
+
+  while(*c->json != ']')
+  {
+    cjson_parse_skip_space(c);
+
+    if(cjson_parse_value(c, &value) == CJSON_OK)    //bug
+    {
+      v->u.arr.size++;
+      v->u.arr.elements = (cjson_value *)realloc(v->u.arr.elements, v->u.arr.size * sizeof(cjson_value));
+      memcpy(v->u.arr.elements + v->u.arr.size - 1, &value, sizeof(cjson_value));
+    }
+
+    cjson_parse_skip_space(c);
+
+    if(*c->json != ',' && *c->json != ']')
+      return CJSON_ERR_ARRAY;
+    
+    if(*c->json == ',')
+      c->json++;
+  }
+  return CJSON_OK;
+}
+
+static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
+{
+  CJSON_STATUS ret;
+  switch (*(c->json))
+  {
+    case 'n':  ret = cjson_parse_literal(c, v, "null", CJSON_NULL);   break;
+    case 't':  ret = cjson_parse_literal(c, v, "true", CJSON_TRUE);   break;
+    case 'f':  ret = cjson_parse_literal(c, v, "false", CJSON_FALSE); break;
+    case '\"': ret = cjson_parse_string(c, v); break;
+    case '[':  ret = cjson_parse_array(c, v); break;
+    default:   ret = cjson_parse_number(c, v); break;
+  }
+
+  return ret;
+}
+
 //--------------------------API--------------------------//
 
 CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
@@ -264,16 +328,7 @@ CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
   cjson_value_init(v);
   cjson_parse_skip_space(&c);
 
-  switch (*c.json)
-  {
-    case 'n':  ret = cjson_parse_literal(&c, v, "null", CJSON_NULL);   break;
-    case 't':  ret = cjson_parse_literal(&c, v, "true", CJSON_TRUE);   break;
-    case 'f':  ret = cjson_parse_literal(&c, v, "false", CJSON_FALSE); break;
-    case '\"': ret = cjson_parse_string(&c, v); break;
-    default:   ret = cjson_parse_number(&c, v); break;
-  }
-  
-  return ret;
+  return cjson_parse_value(&c, v);
 }
 
 cjson_type cjson_get_type(cjson_value value)
@@ -324,4 +379,14 @@ void cjson_set_string(cjson_value *value, const char *buf, size_t len)
   memcpy(value->u.str.buf, buf, len);
   value->u.str.buf[len] = '\0';
   value->u.str.l = len;
+}
+
+size_t cjson_get_array_size(cjson_value value)
+{
+  return value.u.arr.size;
+}
+
+cjson_value *cjson_get_array_element(cjson_value value, size_t index)
+{
+  return value.u.arr.elements + index;
 }

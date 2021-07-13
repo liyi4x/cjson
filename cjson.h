@@ -12,7 +12,8 @@ typedef enum{
   CJSON_ERR_STRING_INVALID_ESCAPE_CAHR,       //转义字符错误
   CJSON_ERR_STACK,
   CJSON_ERR_UNICODE_HEX,  //utf8 16进制解析错误
-  CJSON_ERR_UNICODE_SURROGATE   //utf8 代理项错误
+  CJSON_ERR_UNICODE_SURROGATE,   //utf8 代理项错误
+  CJSON_ERR_ARRAY
 }CJSON_STATUS;
 
 typedef enum{
@@ -25,16 +26,23 @@ typedef enum{
   CJSON_OBJECT
 }cjson_type;
 
-typedef struct
+// typedef struct cjson_value cjson_value;
+typedef struct cjson_value__
 {
   cjson_type type;
   union
   {
     double num;
+
     struct{
       char *buf;
       size_t l;
     }str;
+
+    struct{
+      struct cjson_value__* elements;
+      size_t size;  //元素个数
+    }arr;   //数组
   }u;
 }cjson_value;
 
@@ -53,6 +61,9 @@ void cjson_set_number(cjson_value *value, double num);
 size_t cjson_get_string_length(cjson_value value);
 char* cjson_get_string(cjson_value value);
 void cjson_set_string(cjson_value *value, const char *buf, size_t len);
+
+size_t cjson_get_array_size(cjson_value value);
+cjson_value *cjson_get_array_element(cjson_value value, size_t index);
 
 
 #endif
