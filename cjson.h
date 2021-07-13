@@ -5,34 +5,36 @@
 #include <stddef.h>
 
 typedef enum{
-    CJSON_OK,
-    CJSON_ERR_LITERAL,
-    CJSON_ERR_NUMBER,
-    CJSON_ERR_STRING,
-    CJSON_ERR_STACK
+  CJSON_OK,
+  CJSON_ERR_LITERAL,      //文字解析错误
+  CJSON_ERR_NUMBER,
+  CJSON_ERR_STRING_MISS_QUOTATION_MARK,       //缺少双引号
+  CJSON_ERR_STRING_INVALID_ESCAPE_CAHR,       //转义字符错误
+  CJSON_ERR_STACK,
+  CJSON_ERR_UNICODE
 }CJSON_STATUS;
 
 typedef enum{
-    CJSON_NULL,
-    CJSON_TRUE,
-    CJSON_FALSE,
-    CJSON_NUMBER,
-    CJSON_STRING,
-    CJSON_ARRAY,
-    CJSON_OBJECT
+  CJSON_NULL,
+  CJSON_TRUE,
+  CJSON_FALSE,
+  CJSON_NUMBER,
+  CJSON_STRING,
+  CJSON_ARRAY,
+  CJSON_OBJECT
 }cjson_type;
 
 typedef struct
 {
-    cjson_type type;
-    union
-    {
-        double num;
-        struct {
-            char *buf;
-            size_t l;
-        }str;
-    }u;
+  cjson_type type;
+  union
+  {
+    double num;
+    struct{
+      char *buf;
+      size_t l;
+    }str;
+  }u;
 }cjson_value;
 
 
