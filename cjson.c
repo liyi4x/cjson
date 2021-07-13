@@ -315,6 +315,7 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
   cjson_parse_skip_space(c);
   if(*c->json == ']')
   {
+    c->json++;
     v->type = CJSON_ARRAY;
     v->u.arr.elements = NULL;
     v->u.arr.size = 0;

@@ -131,21 +131,20 @@ void test_array()
     TEST_STRING("abc", cjson_get_string(*cjson_get_array_element(v, 4)), cjson_get_string_length(*cjson_get_array_element(v, 4)));
 
 
-    // lept_init(&v);
-    // EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]"));
-    // EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(&v));
-    // EXPECT_EQ_SIZE_T(4, lept_get_array_size(&v));
-    // for (i = 0; i < 4; i++) {
-    //     lept_value* a = lept_get_array_element(&v, i);
-    //     EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(a));
-    //     EXPECT_EQ_SIZE_T(i, lept_get_array_size(a));
-    //     for (j = 0; j < i; j++) {
-    //         lept_value* e = lept_get_array_element(a, j);
-    //         EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(e));
-    //         EXPECT_EQ_DOUBLE((double)j, lept_get_number(e));
-    //     }
-    // }
-    // lept_free(&v);
+    v.type = CJSON_NULL;
+    TEST_INT(CJSON_OK, cjson_parse(&v, "[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]"));
+    TEST_INT(CJSON_ARRAY, cjson_get_type(v));
+    TEST_SIZE_T(4, cjson_get_array_size(v));
+    for (char i = 0; i < 4; i++) {
+        cjson_value* a = cjson_get_array_element(v, i);
+        TEST_INT(CJSON_ARRAY, cjson_get_type(*a));
+        TEST_SIZE_T(i, cjson_get_array_size(*a));
+        for (char j = 0; j < i; j++) {
+            cjson_value* e = cjson_get_array_element(*a, j);
+            TEST_INT(CJSON_NUMBER, cjson_get_type(*e));
+            TEST_DOUBLE((double)j, cjson_get_number(*e));
+        }
+    }
 }
 
 
@@ -157,8 +156,8 @@ void main()
   test_array();
   
   // TEST_JSON_NUMBER(-1.5, "-1.5");
-  //   cjson_value v = {0};
-  // printf("$$$$$$$$$$$$$$  %d", cjson_parse(&v, "[ null , false , true , 123 , \"abc\" ]"));
+    // cjson_value v = {0};
+  // printf("$$$$$$$$$$$$$$  %d", cjson_parse(&v, "[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]"));
 
   printf("\n===================== result =====================\n");
   printf("  test all %d, pass: %d\n", test_count, test_count_pass);
