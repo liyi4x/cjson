@@ -269,45 +269,94 @@ static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
 
 static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v);
 
+// static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
+// {
+//   const char * p = c->json;
+//   cjson_value value = {0};
+//   v->type = CJSON_ARRAY;
+
+//   c->json++;  //跳过 '['
+//   cjson_parse_skip_space(c);
+
+//   while(1)
+//   {
+//     if(cjson_parse_value(c, &value) == CJSON_OK)    //bug
+//     {
+//       v->u.arr.size++;
+//       v->u.arr.elements = (cjson_value *)realloc(v->u.arr.elements, v->u.arr.size * sizeof(cjson_value));
+//       memcpy(v->u.arr.elements + v->u.arr.size - 1, &value, sizeof(cjson_value));
+//     }
+
+//     cjson_parse_skip_space(c);
+
+//     if(*c->json == ',')
+//     {
+//       c->json++;
+//       cjson_parse_skip_space(c);
+//       if(*c->json == '\0' || *c->json == ']')    //这个检测目前还有BUG
+//         return CJSON_ERR_ARRAY_END_WITH_COMMA;
+//     }
+//     else if(*c->json == ']')
+//       break;
+//     else
+//       return CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET;
+//   }
+//   return CJSON_OK;
+// }
+
 static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 {
-  const char * p = c->json;
   cjson_value value = {0};
-  v->type = CJSON_ARRAY;
+  CJSON_STATUS ret;
+  ssize_t size = 0;
 
   c->json++;  //跳过 '['
+
   cjson_parse_skip_space(c);
+  if(*c->json == ']')
+  {
+    v->type = CJSON_ARRAY;
+    v->u.arr.elements = NULL;
+    v->u.arr.size = 0;
+    return CJSON_OK;
+  }
 
   while(1)
   {
-    if(cjson_parse_value(c, &value) == CJSON_OK)    //bug
-    {
-      v->u.arr.size++;
-      v->u.arr.elements = (cjson_value *)realloc(v->u.arr.elements, v->u.arr.size * sizeof(cjson_value));
-      memcpy(v->u.arr.elements + v->u.arr.size - 1, &value, sizeof(cjson_value));
-    }
+    if(ret = cjson_parse_value(c, &value) != CJSON_OK)
+      return ret;
+
+    memcpy(cjson_push(c, sizeof(cjson_value)), &value, sizeof(cjson_value));  //压栈
+    size++;   //元素个数，并非字节数
 
     cjson_parse_skip_space(c);
 
-    if(*c->json == ',')
+    if(*c->json == ',')   //如果逗号之后没有字符了会在下一次循环cjson_parse_value()中报错
+      c->json++;
+    else if(*c->json == ']')
     {
       c->json++;
-      cjson_parse_skip_space(c);
-      if(*c->json == '\0' || *c->json == ']')    //这个检测目前还有BUG
-        return CJSON_ERR_ARRAY_END_WITH_COMMA;
+      v->type = CJSON_ARRAY;
+      v->u.arr.size = size;
+
+      size *= sizeof(cjson_value);
+      memcpy(v->u.arr.elements = (cjson_value *)malloc(size), cjson_pop(c, size), size);  //压栈，出栈的长度单位都是字节
+      return CJSON_OK;
     }
-    else if(*c->json == ']')
-      break;
     else
       return CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET;
   }
-  return CJSON_OK;
+
+
+
 }
+
 
 static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
 {
   CJSON_STATUS ret;
 
+  cjson_parse_skip_space(c);
   switch (*(c->json))
   {
     case 'n':  ret = cjson_parse_literal(c, v, "null", CJSON_NULL);   break;
@@ -330,7 +379,6 @@ CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
   c.json = json;
 
   cjson_value_init(v);
-  cjson_parse_skip_space(&c);
 
   return cjson_parse_value(&c, v);
 }

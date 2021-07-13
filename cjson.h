@@ -14,7 +14,7 @@ typedef enum{
   CJSON_ERR_UNICODE_HEX,  //utf8 16进制解析错误
   CJSON_ERR_UNICODE_SURROGATE,   //utf8 代理项错误
   CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET,   //数组缺少 ',' 或者 ']'
-  CJSON_ERR_ARRAY_END_WITH_COMMA  //数组最后结尾是逗号
+  // CJSON_ERR_ARRAY_END_WITH_COMMA  //数组最后结尾是逗号
 }CJSON_STATUS;
 
 typedef enum{
