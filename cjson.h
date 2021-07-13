@@ -11,7 +11,8 @@ typedef enum{
   CJSON_ERR_STRING_MISS_QUOTATION_MARK,       //缺少双引号
   CJSON_ERR_STRING_INVALID_ESCAPE_CAHR,       //转义字符错误
   CJSON_ERR_STACK,
-  CJSON_ERR_UNICODE
+  CJSON_ERR_UNICODE_HEX,  //utf8 16进制解析错误
+  CJSON_ERR_UNICODE_SURROGATE   //utf8 代理项错误
 }CJSON_STATUS;
 
 typedef enum{

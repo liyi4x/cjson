@@ -147,7 +147,7 @@ static CJSON_STATUS cjson_parse_4hex(const char *p, uint16_t *hex)
     else if(ch >= 'A' && ch <= 'F')
       *hex |= ch - 'A' + 10;
     else
-      return CJSON_ERR_UNICODE;
+      return CJSON_ERR_UNICODE_HEX;
   }
 
   return CJSON_OK;
@@ -211,18 +211,20 @@ static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
           case '/':  PUSH_CHAR_TO_STACK(c, '/');  break;
           case 'u': 
             if(cjson_parse_4hex(p, &hex) != CJSON_OK)
-              return CJSON_ERR_UNICODE;
+              return CJSON_ERR_UNICODE_HEX;
             p += 4;
             codepoint = hex;
 
             if(hex >= 0xd800 && hex <= 0xdbff)  //hex为高代理项
             {
               uint16_t hex2 = 0;
-              if(*p == '\\')  p++;
-              if(*p == 'u')  p++;
+              if(*p++ != '\\')
+                return CJSON_ERR_UNICODE_SURROGATE;
+              if(*p++ != 'u')
+                return CJSON_ERR_UNICODE_SURROGATE;
 
               if(cjson_parse_4hex(p, &hex2) != CJSON_OK)  //hex2 为低代理项
-                return CJSON_ERR_UNICODE;
+                return CJSON_ERR_UNICODE_HEX;
               p += 4;
 
               codepoint = 0x10000 + (hex - 0xd800) * 0x400 + (hex2 - 0xdc00);
