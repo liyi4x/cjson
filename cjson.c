@@ -58,10 +58,26 @@ static void cjson_value_init(cjson_value *value)
 {
   assert(value != NULL);
 
+  switch(value->type)
+  {
+    case CJSON_STRING:
+      value->u.str.l = 0;
+      free(value->u.str.buf);
+      break;
+    case CJSON_ARRAY:
+      for(size_t i = 0; i < value->u.arr.size; i++)
+      {
+        cjson_value_init(&(value->u.arr.elements[i]));
+      }
+      value->u.arr.size = 0;
+      free(value->u.arr.elements);
+      break;
+    case CJSON_NUMBER:
+      value->u.num = 0;
+      break;
+  }
+
   value->type = CJSON_NULL;
-  value->u.num = 0;
-  value->u.str.l = 0;
-  free(value->u.str.buf);
 }
 
 static void cjson_parse_skip_space(cjson_context *c)
@@ -325,7 +341,7 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
   while(1)
   {
     if(ret = cjson_parse_value(c, &value) != CJSON_OK)
-      return ret;
+      break;
 
     memcpy(cjson_push(c, sizeof(cjson_value)), &value, sizeof(cjson_value));  //压栈
     size++;   //元素个数，并非字节数
@@ -345,11 +361,18 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
       return CJSON_OK;
     }
     else
-      return CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET;
+    {
+      ret = CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET;
+      break;
+    }
   }
 
+  for(size_t i = 0; i < size; i++)
+  {
+    cjson_value_init((cjson_value *)cjson_pop(c, sizeof(cjson_value)));
+  }
 
-
+  return ret;
 }
 
 
@@ -391,22 +414,26 @@ cjson_type cjson_get_type(cjson_value value)
 
 int cjson_get_boolean(cjson_value value)
 {
+  assert(value.type == CJSON_TRUE || value.type == CJSON_FALSE);
   return value.type == CJSON_TRUE;
 }
 
 void cjson_set_boolean(cjson_value *value, int bool)
 {
+  assert(value != NULL);
   cjson_value_init(value);
   value->type = bool ? CJSON_TRUE : CJSON_FALSE;
 }
 
 double cjson_get_number(cjson_value value)
 {
+  assert(value.type == CJSON_NUMBER);
   return value.u.num;
 }
 
 void cjson_set_number(cjson_value *value, double num)
 {
+  assert(value != NULL);
   cjson_value_init(value);
   value->type = CJSON_NUMBER;
   value->u.num = num;
@@ -414,16 +441,19 @@ void cjson_set_number(cjson_value *value, double num)
 
 size_t cjson_get_string_length(cjson_value value)
 {
+  assert(value.type == CJSON_STRING);
   return value.u.str.l;
 }
 
 char* cjson_get_string(cjson_value value)
 {
+  assert(value.type == CJSON_STRING);
   return value.u.str.buf;
 }
 
 void cjson_set_string(cjson_value *value, const char *buf, size_t len)
 {
+  assert(value != NULL);
   assert(buf != NULL || len == 0);
   cjson_value_init(value);
   value->type = CJSON_STRING;
@@ -436,10 +466,14 @@ void cjson_set_string(cjson_value *value, const char *buf, size_t len)
 
 size_t cjson_get_array_size(cjson_value value)
 {
+  assert(value.type == CJSON_ARRAY);
   return value.u.arr.size;
 }
 
 cjson_value *cjson_get_array_element(cjson_value value, size_t index)
 {
+  assert(value.type == CJSON_ARRAY);
+  assert(value.u.arr.size > index);  //index为索引号，从0开始，size为元素数，从1开始
   return value.u.arr.elements + index;
 }
+ 

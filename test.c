@@ -118,7 +118,7 @@ void test_array()
     TEST_INT(CJSON_ARRAY, cjson_get_type(v));
     TEST_SIZE_T(0, cjson_get_array_size(v));
 
-    v.type = CJSON_NULL;
+    v.type = CJSON_TRUE;
     TEST_INT(CJSON_OK, cjson_parse(&v, "[ null , false , true , 123 , \"abc\" ]"));
     TEST_INT(CJSON_ARRAY, cjson_get_type(v));
     TEST_SIZE_T(5, cjson_get_array_size(v));
