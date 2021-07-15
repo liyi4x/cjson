@@ -37,7 +37,7 @@ static void* cjson_push(cjson_context *c, size_t len)
 
     c->stack = realloc(c->stack, c->size);
   }
-  
+
   ret = c->stack + c->top;
   c->top += len;
 
@@ -50,7 +50,7 @@ static void* cjson_pop(cjson_context *c, size_t len)
   assert(len >= 0);
 
   ret = c->stack + (c->top -= len);
-  
+
   return ret;
 }
 
@@ -68,7 +68,7 @@ static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const 
   char i = 0;
   const char *p = c->json;
 
-  // for(i = 0; expect[i+1]; i++)   //这里for这么写的化，最后一个字符不比较，有bug
+  // for(i = 0; expect[i+1]; i++)   //这里for这么写的话，最后一个字符不比较，有bug
   // {
   //   if(*p++ != expect[i])
   //     return CJSON_ERR_LITERAL;
@@ -79,9 +79,9 @@ static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const 
     if(*p++ != expect[i])
       return CJSON_ERR_LITERAL;
   }while(expect[++i]);
-  
+
   v->type = type;
-  
+
   c->json = p;
 
   return CJSON_OK;
@@ -214,7 +214,7 @@ static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, siz
           case '\\': PUSH_CHAR_TO_STACK(c, '\\'); break;
           case '\"': PUSH_CHAR_TO_STACK(c, '\"'); break;
           case '/':  PUSH_CHAR_TO_STACK(c, '/');  break;
-          case 'u': 
+          case 'u':
             if(cjson_parse_4hex(p, &hex) != CJSON_OK)
               return CJSON_ERR_UNICODE_HEX;
             p += 4;
@@ -253,7 +253,8 @@ static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, siz
         // cjson_set_string(v, (const char *)cjson_pop(c, len), len);
         *s = (const char *)cjson_pop(c, len);
         *l = len;
-        c->json = ++p;
+        // c->json = ++p;
+        c->json = p++;
         return CJSON_OK;
         break;
     }
@@ -272,42 +273,6 @@ static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
 }
 
 static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v);
-
-// static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
-// {
-//   const char * p = c->json;
-//   cjson_value value = {0};
-//   v->type = CJSON_ARRAY;
-
-//   c->json++;  //跳过 '['
-//   cjson_parse_skip_space(c);
-
-//   while(1)
-//   {
-//     if(cjson_parse_value(c, &value) == CJSON_OK)    //bug
-//     {
-//       v->u.arr.size++;
-//       v->u.arr.elements = (cjson_value *)realloc(v->u.arr.elements, v->u.arr.size * sizeof(cjson_value));
-//       memcpy(v->u.arr.elements + v->u.arr.size - 1, &value, sizeof(cjson_value));
-//     }
-
-//     cjson_parse_skip_space(c);
-
-//     if(*c->json == ',')
-//     {
-//       c->json++;
-//       cjson_parse_skip_space(c);
-//       if(*c->json == '\0' || *c->json == ']')    //这个检测目前还有BUG
-//         return CJSON_ERR_ARRAY_END_WITH_COMMA;
-//     }
-//     else if(*c->json == ']')
-//       break;
-//     else
-//       return CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET;
-//   }
-//   return CJSON_OK;
-// }
-
 static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 {
   cjson_value value = {0};
@@ -407,7 +372,7 @@ static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
 
     if((ret = cjson_parse_value(c, &member.value) != CJSON_OK))
       return ret;
-    
+
     memcpy((cjson_member *)cjson_push(c, sizeof(cjson_member)), &member, sizeof(cjson_member));
     size++;
 
@@ -461,7 +426,97 @@ static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
   return ret;
 }
 
+static void cjson_stringify_string(cjson_context *c, const char *str, size_t len)
+{
+  static const char hex[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+  char *p, *head;
+
+  p = head = cjson_push(c, len * 6 + 2);    //按最坏的情况计算，全部转化乘 \uxxxx 形式，再加两个引号
+
+  *p++ = '\"';
+
+  for(size_t i = 0; i < len; i++)
+  {
+    switch(str[i])
+    {
+      case '\b': *p++ = '\\'; *p++ = 'b'; break;
+      case '\f': *p++ = '\\'; *p++ = 'f'; break;
+      case '\r': *p++ = '\\'; *p++ = 'r'; break;
+      case '\n': *p++ = '\\'; *p++ = 'n'; break;
+      case '\t': *p++ = '\\'; *p++ = 't'; break;
+      case '\\': *p++ = '\\'; *p++ = '\\'; break;
+      case '\"': *p++ = '\\'; *p++ = '\"'; break;
+      default :
+        if((uint8_t)str[i] < 0x20)
+        {
+          *p++ = '\\';  *p++ = 'u';  *p++ = '0';  *p++ = '0';
+          *p++ = hex[(str[i] >> 4) & 0x0f];
+          *p++ = hex[(str[i]) & 0x0f];
+        }
+        else
+        {
+          *p++ = str[i];
+        }
+        break;
+    }
+  }
+  *p++ = '\"';
+  c->top -=  len * 6 + 2 - (p - head);
+}
+
+#define CJSON_STRINGIFY_PUT_CHAR(c, ch) do{*(char *)cjson_push(c, sizeof(char)) = (ch);}while(0)
+static void cjson_stringify_value(cjson_context *c, const cjson_value *v)
+{
+  char *s;
+  size_t len;
+
+  switch(v->type)
+  {
+    case CJSON_NULL: memcpy(cjson_push(c, 4), "null", 4); break;
+    case CJSON_TRUE: memcpy(cjson_push(c, 4), "true", 4); break;
+    case CJSON_FALSE: memcpy(cjson_push(c, 5), "false", 5); break;
+    case CJSON_NUMBER: c->top -= 32 - sprintf(cjson_push(c, 32), "%.17g", v->u.num); break;
+    case CJSON_STRING: cjson_stringify_string(c, v->u.str.buf, v->u.str.l); break;
+    case CJSON_ARRAY:
+      CJSON_STRINGIFY_PUT_CHAR(c, '[');
+      for(size_t i = 0; i < v->u.arr.size; i++)
+      {
+        if(i != 0)
+          CJSON_STRINGIFY_PUT_CHAR(c, ',');
+        cjson_stringify_value(c, (const cjson_value *)v->u.arr.elements + i);   //数组中的第i个元素
+      }
+      CJSON_STRINGIFY_PUT_CHAR(c, ']');
+      break;
+    case CJSON_OBJECT:
+      CJSON_STRINGIFY_PUT_CHAR(c, '{');
+      for(size_t i = 0; i < v->u.obj.size; i++)
+      {
+        if(i != 0)
+          CJSON_STRINGIFY_PUT_CHAR(c, ',');
+        cjson_stringify_string(c, v->u.obj.members[i].key, v->u.obj.members[i].key_len);
+        CJSON_STRINGIFY_PUT_CHAR(c, ':');
+        cjson_stringify_value(c, &v->u.obj.members[i].value);   //对象中的第i个key-value的 value
+      }
+      CJSON_STRINGIFY_PUT_CHAR(c, '}');
+      break;
+  }
+}
+
 //--------------------------API--------------------------//
+
+char *cjson_stringify(cjson_value v, size_t *length)
+{
+  cjson_context c = {0};
+
+  cjson_stringify_value(&c, &v);
+
+  if(length)
+    *length = c.top;
+
+  *(char*)cjson_push(&c, sizeof(char)) = ('\0');
+
+  return c.stack;
+}
 
 CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
 {
@@ -579,7 +634,6 @@ cjson_value *cjson_get_array_element(cjson_value value, size_t index)
   assert(value.u.arr.size > index);  //index为索引号，从0开始，size为元素数，从1开始
   return value.u.arr.elements + index;
 }
- 
 
 size_t cjson_get_object_size(cjson_value value)
 {

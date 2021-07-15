@@ -93,6 +93,7 @@ const char *cjson_get_object_key(cjson_value value, size_t index);
 size_t cjson_get_object_key_length(cjson_value value, size_t index);
 cjson_value *cjson_get_object_value(cjson_value value, size_t index);
 
+char *cjson_stringify(cjson_value v, size_t *length);
 
 
 #endif

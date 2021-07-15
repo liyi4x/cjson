@@ -208,6 +208,71 @@ static void test_object() {
 }
 
 
+#define TEST_ROUNDTRIP(json)\
+    do {\
+        cjson_value v;\
+        char* json2;\
+        size_t length;\
+        cjson_value_init(&v);\
+        TEST_INT(CJSON_OK, cjson_parse(&v, json));\
+        json2 = cjson_stringify(v, &length);\
+        TEST_STRING(json, json2, length);\
+        cjson_value_init(&v);\
+        free(json2);\
+    } while(0)
+
+static void test_stringify_number() {
+    TEST_ROUNDTRIP("0");
+    TEST_ROUNDTRIP("-0");
+    TEST_ROUNDTRIP("1");
+    TEST_ROUNDTRIP("-1");
+    TEST_ROUNDTRIP("1.5");
+    TEST_ROUNDTRIP("-1.5");
+    TEST_ROUNDTRIP("3.25");
+    TEST_ROUNDTRIP("1e+20");
+    TEST_ROUNDTRIP("1.234e+20");
+    TEST_ROUNDTRIP("1.234e-20");
+
+    TEST_ROUNDTRIP("1.0000000000000002"); /* the smallest number > 1 */
+    TEST_ROUNDTRIP("4.9406564584124654e-324"); /* minimum denormal */
+    TEST_ROUNDTRIP("-4.9406564584124654e-324");
+    TEST_ROUNDTRIP("2.2250738585072009e-308");  /* Max subnormal double */
+    TEST_ROUNDTRIP("-2.2250738585072009e-308");
+    TEST_ROUNDTRIP("2.2250738585072014e-308");  /* Min normal positive double */
+    TEST_ROUNDTRIP("-2.2250738585072014e-308");
+    TEST_ROUNDTRIP("1.7976931348623157e+308");  /* Max double */
+    TEST_ROUNDTRIP("-1.7976931348623157e+308");
+}
+
+static void test_stringify_string() {
+    TEST_ROUNDTRIP("\"\"");
+    TEST_ROUNDTRIP("\"Hello\"");
+    TEST_ROUNDTRIP("\"Hello\\nWorld\"");
+    TEST_ROUNDTRIP("\"\\\" \\\\ / \\b \\f \\n \\r \\t\"");
+    TEST_ROUNDTRIP("\"Hello\\u0000World\"");
+}
+
+static void test_stringify_array() {
+    TEST_ROUNDTRIP("[]");
+    TEST_ROUNDTRIP("[null,false,true,123,\"abc\",[1,2,3]]");
+}
+
+static void test_stringify_object() {
+    TEST_ROUNDTRIP("{}");
+    TEST_ROUNDTRIP("{\"n\":null,\"f\":false,\"t\":true,\"i\":123,\"s\":\"abc\",\"a\":[1,2,3],\"o\":{\"1\":1,\"2\":2,\"3\":3}}");
+}
+
+static void test_stringify() {
+    TEST_ROUNDTRIP("null");
+    TEST_ROUNDTRIP("false");
+    TEST_ROUNDTRIP("true");
+    test_stringify_number();
+    test_stringify_string();
+    test_stringify_array();
+    test_stringify_object();
+}
+
+
 void main()
 {
   test_literal();
@@ -215,10 +280,20 @@ void main()
   test_string();
   test_array();
   test_object();
+
+  test_stringify();
+
+// cjson_value v; 
+// char* json2; 
+// size_t length; 
+// cjson_value_init(&v); 
+// TEST_INT(CJSON_OK, cjson_parse(&v, "[null,false,true,123,\"abc\",[1,2,3]]"));
+
+// json2 = cjson_stringify(v, &length); 
+// puts(json2);
+// TEST_STRING("[null,false,true,123,\"abc\",[1,2,3]]", json2, length);
+
   
-  // TEST_JSON_NUMBER(-1.5, "-1.5");
-    // cjson_value v = {0};
-  // printf("$$$$$$$$$$$$$$  %d", cjson_parse(&v, "[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]"));
 
   printf("\n===================== result =====================\n");
   printf("  test all %d, pass: %d\n", test_count, test_count_pass);
