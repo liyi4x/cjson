@@ -147,6 +147,66 @@ void test_array()
     }
 }
 
+static void test_object() {
+    cjson_value v;
+    size_t i;
+
+    cjson_value_init(&v);
+    TEST_INT(CJSON_OK, cjson_parse(&v, " { } "));
+    TEST_INT(CJSON_OBJECT, cjson_get_type(v));
+    TEST_SIZE_T(0, cjson_get_object_size(v));
+    
+
+    cjson_value_init(&v);
+
+    TEST_INT(CJSON_OK, cjson_parse(&v,
+        " { "
+        "\"n\" : null , "
+        "\"f\" : false , "
+        "\"t\" : true , "
+        "\"i\" : 123 , "
+        "\"s\" : \"abc\", "
+        "\"a\" : [ 1, 2, 3 ],"
+        "\"o\" : { \"1\" : 1, \"2\" : 2, \"3\" : 3 }"
+        " } "
+    ));
+    TEST_INT(CJSON_OBJECT, cjson_get_type(v));
+    TEST_SIZE_T(7, cjson_get_object_size(v));
+    TEST_STRING("n", cjson_get_object_key(v, 0), cjson_get_object_key_length(v, 0));
+    TEST_INT(CJSON_NULL,   cjson_get_type(*cjson_get_object_value(v, 0)));
+    TEST_STRING("f", cjson_get_object_key(v, 1), cjson_get_object_key_length(v, 1));
+    TEST_INT(CJSON_FALSE,  cjson_get_type(*cjson_get_object_value(v, 1)));
+    TEST_STRING("t", cjson_get_object_key(v, 2), cjson_get_object_key_length(v, 2));
+    TEST_INT(CJSON_TRUE,   cjson_get_type(*cjson_get_object_value(v, 2)));
+    TEST_STRING("i", cjson_get_object_key(v, 3), cjson_get_object_key_length(v, 3));
+    TEST_INT(CJSON_NUMBER, cjson_get_type(*cjson_get_object_value(v, 3)));
+    TEST_DOUBLE(123.0, cjson_get_number(*cjson_get_object_value(v, 3)));
+    TEST_STRING("s", cjson_get_object_key(v, 4), cjson_get_object_key_length(v, 4));
+    TEST_INT(CJSON_STRING, cjson_get_type(*cjson_get_object_value(v, 4)));
+    TEST_STRING("abc", cjson_get_string(*cjson_get_object_value(v, 4)), cjson_get_string_length(*cjson_get_object_value(v, 4)));
+    TEST_STRING("a", cjson_get_object_key(v, 5), cjson_get_object_key_length(v, 5));
+    TEST_INT(CJSON_ARRAY, cjson_get_type(*cjson_get_object_value(v, 5)));
+    TEST_SIZE_T(3, cjson_get_array_size(*cjson_get_object_value(v, 5)));
+    for (i = 0; i < 3; i++) {
+        cjson_value* e = cjson_get_array_element(*cjson_get_object_value(v, 5), i);
+        TEST_INT(CJSON_NUMBER, cjson_get_type(*e));
+        TEST_DOUBLE(i + 1.0, cjson_get_number(*e));
+    }
+    TEST_STRING("o", cjson_get_object_key(v, 6), cjson_get_object_key_length(v, 6));
+    {
+        cjson_value* o = cjson_get_object_value(v, 6);
+        TEST_INT(CJSON_OBJECT, cjson_get_type(*o));
+        for (i = 0; i < 3; i++) {
+            cjson_value* ov = cjson_get_object_value(*o, i);
+            // EXPECT_TRUE('1' + i == cjson_get_object_key(*o, i)[0]);
+            TEST_SIZE_T(1, cjson_get_object_key_length(*o, i));
+            TEST_INT(CJSON_NUMBER, cjson_get_type(*ov));
+            TEST_DOUBLE(i + 1.0, cjson_get_number(*ov));
+        }
+    }
+    cjson_value_init(&v);
+}
+
 
 void main()
 {
@@ -154,6 +214,7 @@ void main()
   test_number();
   test_string();
   test_array();
+  test_object();
   
   // TEST_JSON_NUMBER(-1.5, "-1.5");
     // cjson_value v = {0};

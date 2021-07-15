@@ -54,32 +54,6 @@ static void* cjson_pop(cjson_context *c, size_t len)
   return ret;
 }
 
-static void cjson_value_init(cjson_value *value)
-{
-  assert(value != NULL);
-
-  switch(value->type)
-  {
-    case CJSON_STRING:
-      value->u.str.l = 0;
-      free(value->u.str.buf);
-      break;
-    case CJSON_ARRAY:
-      for(size_t i = 0; i < value->u.arr.size; i++)
-      {
-        cjson_value_init(&(value->u.arr.elements[i]));
-      }
-      value->u.arr.size = 0;
-      free(value->u.arr.elements);
-      break;
-    case CJSON_NUMBER:
-      value->u.num = 0;
-      break;
-  }
-
-  value->type = CJSON_NULL;
-}
-
 static void cjson_parse_skip_space(cjson_context *c)
 {
   const char *p = c->json;
@@ -209,7 +183,8 @@ static void cjson_parse_utf8(cjson_context *c, uint32_t codepoint)
   }
 }
 
-static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
+
+static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, size_t *l) //解析出来的字符串长度不包括c语言规定的结尾字节 '\0'
 {
   size_t len, head = c->top;
   const char *p = c->json;
@@ -275,12 +250,25 @@ static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
 
       case '\"':  //字符串结束引号
         len = c->top - head;
-        cjson_set_string(v, (const char *)cjson_pop(c, len), len);
+        // cjson_set_string(v, (const char *)cjson_pop(c, len), len);
+        *s = (const char *)cjson_pop(c, len);
+        *l = len;
         c->json = ++p;
         return CJSON_OK;
         break;
     }
   }
+}
+
+static CJSON_STATUS cjson_parse_string(cjson_context *c, cjson_value *v)
+{
+  const char *s;
+  size_t len;
+  CJSON_STATUS ret;
+
+  if((ret = cjson_parse_string_raw(c, &s, &len)) == CJSON_OK)
+    cjson_set_string(v, s, len);
+  return ret;
 }
 
 static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v);
@@ -340,7 +328,7 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 
   while(1)
   {
-    if(ret = cjson_parse_value(c, &value) != CJSON_OK)
+    if((ret = cjson_parse_value(c, &value)) != CJSON_OK)  // = 的优先级低于 !=
       break;
 
     memcpy(cjson_push(c, sizeof(cjson_value)), &value, sizeof(cjson_value));  //压栈
@@ -375,6 +363,84 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
   return ret;
 }
 
+static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
+{
+  CJSON_STATUS ret;
+  size_t size = 0;
+  cjson_member member;
+
+  c->json++;  //跳过 '{'
+
+  cjson_parse_skip_space(c);
+  if(*c->json == '}')
+  {
+    c->json++;
+    v->type = CJSON_OBJECT;
+    v->u.obj.members = NULL;
+    v->u.obj.size = 0;
+    return CJSON_OK;
+  }
+
+  while(1)
+  {
+    //key
+    if(*c->json != '\"')
+    {
+      ret = CJSON_ERR_OBJECT_NEED_KEY;
+      break;
+    }
+    const char *str;
+    if((ret = cjson_parse_string_raw(c, &(str), &(member.key_len))) != CJSON_OK)    //这里先解析字符串，成功之后再申请内存放到member变量中
+      break;
+    memcpy(member.key = (char *)malloc(member.key_len + 1), str, member.key_len);
+    member.key[member.key_len] = '\0';
+
+    //:
+    cjson_parse_skip_space(c);
+    if(*c->json == ':')
+      c->json++;
+    else
+    {
+      ret = CJSON_ERR_OBJECT_NEED_COLON;
+      break;
+    }
+
+    if((ret = cjson_parse_value(c, &member.value) != CJSON_OK))
+      return ret;
+    
+    memcpy((cjson_member *)cjson_push(c, sizeof(cjson_member)), &member, sizeof(cjson_member));
+    size++;
+
+    cjson_parse_skip_space(c);
+
+    if(*c->json == ',')
+    {
+      c->json++;
+      cjson_parse_skip_space(c);
+    }
+    else if(*c->json == '}')
+    {
+      v->type = CJSON_OBJECT;
+      v->u.obj.size = size;
+
+      size *= sizeof(cjson_member);
+
+      memcpy(v->u.obj.members = (cjson_member *)malloc(size), cjson_pop(c, size), size);
+      return CJSON_OK;
+    }
+  }
+
+  free(member.key);
+  for(size_t i = 0; i < size; i++)
+  {
+    cjson_member *m;
+    m = (cjson_member *)cjson_pop(c, sizeof(cjson_member));
+    free(m->key);
+    cjson_value_init(&m->value);
+  }
+
+  return ret;
+}
 
 static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
 {
@@ -388,6 +454,7 @@ static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
     case 'f':  ret = cjson_parse_literal(c, v, "false", CJSON_FALSE); break;
     case '\"': ret = cjson_parse_string(c, v); break;
     case '[':  ret = cjson_parse_array(c, v); break;
+    case '{':  ret = cjson_parse_object(c, v); break;
     default:   ret = cjson_parse_number(c, v); break;
   }
 
@@ -405,6 +472,42 @@ CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
   cjson_value_init(v);
 
   return cjson_parse_value(&c, v);
+}
+
+void cjson_value_init(cjson_value *value)
+{
+  assert(value != NULL);
+
+  switch(value->type)
+  {
+    case CJSON_STRING:
+      value->u.str.l = 0;
+      free(value->u.str.buf);
+      break;
+    case CJSON_ARRAY:
+      for(size_t i = 0; i < value->u.arr.size; i++)
+      {
+        cjson_value_init(&(value->u.arr.elements[i]));
+      }
+      value->u.arr.size = 0;
+      free(value->u.arr.elements);
+      break;
+    case CJSON_NUMBER:
+      value->u.num = 0;
+      break;
+    case CJSON_OBJECT:
+      for(size_t i = 0; i < value->u.obj.size; i++)
+      {
+        free(value->u.obj.members[i].key);
+        value->u.obj.members[i].key_len = 0;
+        cjson_value_init(&value->u.obj.members[i].value);
+      }
+
+      value->u.obj.size = 0;
+      break;
+  }
+
+  value->type = CJSON_NULL;
 }
 
 cjson_type cjson_get_type(cjson_value value)
@@ -477,3 +580,30 @@ cjson_value *cjson_get_array_element(cjson_value value, size_t index)
   return value.u.arr.elements + index;
 }
  
+
+size_t cjson_get_object_size(cjson_value value)
+{
+  assert(value.type == CJSON_OBJECT);
+  return value.u.obj.size;
+}
+
+const char *cjson_get_object_key(cjson_value value, size_t index)
+{
+  assert(value.type == CJSON_OBJECT);
+  assert(value.u.obj.size > index);  //index为索引号，从0开始，size为元素数，从1开始
+  return (value.u.obj.members + index)->key;
+}
+
+size_t cjson_get_object_key_length(cjson_value value, size_t index)
+{
+  assert(value.type == CJSON_OBJECT);
+  assert(value.u.obj.size > index);  //index为索引号，从0开始，size为元素数，从1开始
+  return (value.u.obj.members + index)->key_len;
+}
+
+cjson_value *cjson_get_object_value(cjson_value value, size_t index)
+{
+  assert(value.type == CJSON_OBJECT);
+  assert(value.u.obj.size > index);  //index为索引号，从0开始，size为元素数，从1开始
+  return &((value.u.obj.members + index)->value);
+}
