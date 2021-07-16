@@ -334,7 +334,7 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 
   for(size_t i = 0; i < size; i++)
   {
-    cjson_value_init((cjson_value *)cjson_pop(c, sizeof(cjson_value)));
+    cjson_value_free((cjson_value *)cjson_pop(c, sizeof(cjson_value)));
   }
 
   return ret;
@@ -420,7 +420,7 @@ static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
     cjson_member *m;
     m = (cjson_member *)cjson_pop(c, sizeof(cjson_member));
     free(m->key);
-    cjson_value_init(&m->value);
+    cjson_value_free(&m->value);
   }
 
   return ret;
@@ -562,7 +562,7 @@ CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
   return ret;
 }
 
-void cjson_value_init(cjson_value *value)
+void cjson_value_free(cjson_value *value)
 {
   assert(value != NULL);
 
@@ -575,7 +575,7 @@ void cjson_value_init(cjson_value *value)
     case CJSON_ARRAY:
       for(size_t i = 0; i < value->u.arr.size; i++)
       {
-        cjson_value_init(&(value->u.arr.elements[i]));
+        cjson_value_free(&(value->u.arr.elements[i]));
       }
       value->u.arr.size = 0;
       free(value->u.arr.elements);
@@ -588,7 +588,7 @@ void cjson_value_init(cjson_value *value)
       {
         free(value->u.obj.members[i].key);
         value->u.obj.members[i].key_len = 0;
-        cjson_value_init(&value->u.obj.members[i].value);
+        cjson_value_free(&value->u.obj.members[i].value);
       }
 
       value->u.obj.size = 0;
@@ -629,19 +629,108 @@ int cjson_is_equal(const cjson_value* lhs, const cjson_value* rhs)
     case CJSON_OBJECT:
       if(!(ret = (lhs->u.obj.size == rhs->u.obj.size)))
         break;
+      // for(size_t i = 0; i < lhs->u.obj.size; i++)
+      // {
+      //   if(!(ret = lhs->u.obj.members[i].key_len == rhs->u.obj.members[i].key_len\
+      //         && !memcmp(lhs->u.obj.members[i].key, \
+      //                    rhs->u.obj.members[i].key, \
+      //                    lhs->u.obj.members[i].key_len)))
+      //     break;
+      //   if(!(ret = cjson_is_equal(&lhs->u.obj.members[i].value, &rhs->u.obj.members[i].value)))
+      //     break;
+      // }
+
+      ret = 1;
       for(size_t i = 0; i < lhs->u.obj.size; i++)
       {
-        if(!(ret = lhs->u.obj.members[i].key_len == rhs->u.obj.members[i].key_len\
-              && !memcmp(lhs->u.obj.members[i].key, \
-                         rhs->u.obj.members[i].key, \
-                         lhs->u.obj.members[i].key_len)))
+        char flag = 0;
+
+        for(size_t j = 0; j < rhs->u.obj.size; j++)
+          if(cjson_is_equal(&lhs->u.obj.members[i].value, &rhs->u.obj.members[j].value))
+            flag = 1;
+        if(flag == 0) //lhs当前元素在r中有没相同的
+        {
+          ret = 0;
           break;
-        if(!(ret = cjson_is_equal(&lhs->u.obj.members[i].value, &rhs->u.obj.members[i].value)))
-          break;
+        }
       }
       break;
   }
   return ret;
+}
+
+void cjson_copy(cjson_value *dest, const cjson_value *src)
+{
+  assert(dest != NULL && src != NULL);
+  
+
+  // memset(dest, 0, sizeof(cjson_value)); //init;
+  
+  dest->type = src->type;
+  // memcpy(dest, src, sizeof(cjson_value));
+
+  switch(src->type)
+  {
+    case CJSON_NULL:
+    case CJSON_TRUE:
+    case CJSON_FALSE:
+      break;
+    case CJSON_NUMBER:
+      cjson_set_number(dest, cjson_get_number(*src));
+      break;
+    case CJSON_STRING:
+      cjson_set_string(dest, cjson_get_string(*src), cjson_get_string_length(*src));
+      break;
+    case CJSON_ARRAY:
+      for(size_t i = 0; i < src->u.arr.size; i++)
+      {//这里需要遍历每个元素，递归添加，要保证深度复制就要看数组、字符串、对象元素中的指针指向新的内存
+        cjson_copy(cjson_pushback_array_element(dest), src->u.arr.elements + i);    
+      }
+
+      // size = sizeof(cjson_value) * cjson_get_array_size(*src);
+      // dest->u.arr.elements = (cjson_value *)malloc(size);
+      // memcpy(dest->u.arr.elements, src->u.arr.elements, size);
+      break;
+
+    case CJSON_OBJECT:
+      for(size_t i = 0; i < src->u.obj.size; i++)
+      {//这里需要遍历每个元素，递归添加，要保证深度复制就要看数组、字符串、对象元素中的指针指向新的内存
+        size_t size = src->u.obj.size;
+        dest->u.obj.size = size;
+        size *= sizeof(cjson_member);
+        dest->u.obj.members = malloc(size);
+
+        size = src->u.obj.members[i].key_len * sizeof(char);
+        dest->u.obj.members[i].key_len = size;
+        memcpy(dest->u.obj.members[i].key = malloc(size + 1), src->u.obj.members[i].key, size);
+        dest->u.obj.members[i].key[size] = '\0';  //注意必须添加字符串结束符
+
+        cjson_copy(&dest->u.obj.members[i].value, &src->u.obj.members[i].value);
+      }
+      break;
+  }
+}
+
+void cjson_move(cjson_value *dest, cjson_value *src)
+{
+  assert(dest != NULL && src != NULL);
+
+  cjson_value_free(dest);
+  memcpy(dest, src, sizeof(cjson_value));
+  cjson_value_init(src);
+}
+
+void cjson_swap(cjson_value *dest, cjson_value *src)
+{
+  assert(dest != NULL && src != NULL);
+  cjson_value tmp;
+
+  if(dest != src)
+  {
+    memcpy(&tmp, src, sizeof(cjson_value));
+    memcpy(src, dest, sizeof(cjson_value));
+    memcpy(dest, &tmp, sizeof(cjson_value));
+  }
 }
 
 cjson_type cjson_get_type(cjson_value value)
@@ -658,7 +747,7 @@ int cjson_get_boolean(cjson_value value)
 void cjson_set_boolean(cjson_value *value, int bool)
 {
   assert(value != NULL);
-  cjson_value_init(value);
+  cjson_value_free(value);
   value->type = bool ? CJSON_TRUE : CJSON_FALSE;
 }
 
@@ -671,7 +760,7 @@ double cjson_get_number(cjson_value value)
 void cjson_set_number(cjson_value *value, double num)
 {
   assert(value != NULL);
-  cjson_value_init(value);
+  cjson_value_free(value);
   value->type = CJSON_NUMBER;
   value->u.num = num;
 }
@@ -692,7 +781,7 @@ void cjson_set_string(cjson_value *value, const char *buf, size_t len)
 {
   assert(value != NULL);
   assert(buf != NULL || len == 0);
-  cjson_value_init(value);
+  cjson_value_free(value);
   value->type = CJSON_STRING;
   value->u.str.buf = malloc(len + 1);
 
@@ -707,11 +796,101 @@ size_t cjson_get_array_size(cjson_value value)
   return value.u.arr.size;
 }
 
+size_t cjson_get_array_capacity(cjson_value value)
+{
+  assert(value.type == CJSON_ARRAY);
+  return value.u.arr.capacity;
+}
+
 cjson_value *cjson_get_array_element(cjson_value value, size_t index)
 {
   assert(value.type == CJSON_ARRAY);
   assert(value.u.arr.size > index);  //index为索引号，从0开始，size为元素数，从1开始
   return value.u.arr.elements + index;
+}
+
+void cjson_init_array(cjson_value *value, size_t cap)
+{
+  assert(value != NULL);
+
+  cjson_value_free(value);
+  value->type = CJSON_ARRAY;
+  value->u.arr.size = 0;
+  value->u.arr.capacity = cap;
+  value->u.arr.elements = cap > 0 ? (cjson_value *)malloc(sizeof(cjson_value) * cap) : NULL;
+}
+
+void cjson_resize_array(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+  if(value->u.arr.capacity <= value->u.arr.size)
+  {
+    value->u.arr.capacity = value->u.arr.capacity == 0? 1 : value->u.arr.capacity + value->u.arr.capacity >> 1;
+    value->u.arr.elements = (cjson_value *)realloc(value->u.arr.elements, value->u.arr.capacity);
+  }
+}
+cjson_value *cjson_pushback_array_element(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+
+  if(value->u.arr.size >= value->u.arr.capacity)
+    cjson_resize_array(value);
+  
+  cjson_value_init(value->u.arr.elements + value->u.arr.size);
+  return value->u.arr.elements + value->u.arr.size++;
+}
+
+cjson_value *cjson_popback_array_element(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+  return value->u.arr.elements + --value->u.arr.size;
+}
+
+cjson_value *cjson_insert_array_element(cjson_value *value, size_t index)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+
+  if(value->u.arr.size >= value->u.arr.capacity)
+    cjson_resize_array(value);
+
+  memmove(value->u.arr.elements + index, value->u.arr.elements + index + 1, sizeof(cjson_value) * (value->u.arr.size - index));
+  value->u.arr.size++;
+
+  return value->u.arr.elements + index;
+}
+
+void cjson_erase_array_element(cjson_value *value, size_t index, size_t count)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+  assert(index + count < value->u.arr.size);
+
+  for(size_t i = 0; i < count; i++)
+  {
+    cjson_value_free(value->u.arr.elements + index + i);
+  }
+  // cjson_move();
+  memmove(value->u.arr.elements + index, value->u.arr.elements + index + count, count * sizeof(cjson_value));
+}
+
+void cjson_clear_array_element(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+  cjson_erase_array_element(value, 0, value->u.arr.size);
+}
+
+void cjson_shrink_array(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_ARRAY);
+
+  value->u.arr.capacity = value->u.arr.size;
+  value->u.arr.elements = realloc(value->u.arr.elements, value->u.arr.capacity);
 }
 
 size_t cjson_get_object_size(cjson_value value)
