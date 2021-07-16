@@ -598,6 +598,52 @@ void cjson_value_init(cjson_value *value)
   value->type = CJSON_NULL;
 }
 
+int cjson_is_equal(const cjson_value* lhs, const cjson_value* rhs)
+{
+  assert(lhs != NULL && rhs != NULL);
+  int ret = 0;
+
+  if(lhs->type != rhs->type)
+    return 0;
+
+  switch(lhs->type)
+  {
+    case CJSON_NULL:
+    case CJSON_TRUE:
+    case CJSON_FALSE:
+      ret = lhs->type == rhs->type;
+      break;
+    case CJSON_NUMBER:
+      ret = lhs->u.num == rhs->u.num;
+      break;
+    case CJSON_STRING:
+      ret = lhs->u.str.l == rhs->u.str.l && !memcmp(lhs->u.str.buf, rhs->u.str.buf, lhs->u.str.l);
+      break;
+    case CJSON_ARRAY:
+      if(!(ret = lhs->u.arr.size == rhs->u.arr.size))
+        break;
+      for(size_t i = 0; i < lhs->u.arr.size; i++)
+        if(!(ret = cjson_is_equal(&lhs->u.arr.elements[i], &rhs->u.arr.elements[i])))
+          break;
+      break;
+    case CJSON_OBJECT:
+      if(!(ret = (lhs->u.obj.size == rhs->u.obj.size)))
+        break;
+      for(size_t i = 0; i < lhs->u.obj.size; i++)
+      {
+        if(!(ret = lhs->u.obj.members[i].key_len == rhs->u.obj.members[i].key_len\
+              && !memcmp(lhs->u.obj.members[i].key, \
+                         rhs->u.obj.members[i].key, \
+                         lhs->u.obj.members[i].key_len)))
+          break;
+        if(!(ret = cjson_is_equal(&lhs->u.obj.members[i].value, &rhs->u.obj.members[i].value)))
+          break;
+      }
+      break;
+  }
+  return ret;
+}
+
 cjson_type cjson_get_type(cjson_value value)
 {
   return value.type;

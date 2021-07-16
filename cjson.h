@@ -71,8 +71,10 @@ struct cjson_member__
 
 
 CJSON_STATUS cjson_parse(cjson_value *v, const char *json);
+char *cjson_stringify(cjson_value v, size_t *length);
 
 void cjson_value_init(cjson_value *value);
+int cjson_is_equal(const cjson_value* lhs, const cjson_value* rhs);
 
 cjson_type cjson_get_type(cjson_value value);
 
@@ -94,7 +96,6 @@ const char *cjson_get_object_key(cjson_value value, size_t index);
 size_t cjson_get_object_key_length(cjson_value value, size_t index);
 cjson_value *cjson_get_object_value(cjson_value value, size_t index);
 
-char *cjson_stringify(cjson_value v, size_t *length);
 
 
 #endif
