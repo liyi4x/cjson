@@ -1,9 +1,10 @@
 #include "cjson.h"
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <stdio.h>
+#include <assert.h>  /* assert() */
+#include <errno.h>   /* errno, ERANGE */
+#include <math.h>    /* HUGE_VAL */
+#include <stdio.h>   /* sprintf() */
+#include <stdlib.h>  /* NULL, malloc(), realloc(), free(), strtod() */
+#include <string.h>  /* memcpy() */
 
 #ifndef CJSON_STACK_SIZE
 #define CJSON_STACK_SIZE (256)
@@ -102,7 +103,7 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
   else
   {
     if(!IS0TO9(*p))
-      return CJSON_ERR_NUMBER;
+      return CJSON_ERR_LITERAL;   //文字错误，switch的default分支默认解析数字
     // while(IS0TO9(*p++));       //bug //这里IS0TO9()宏中如果有自增的话会自增两次，宏定义的原因
     for(p++; IS0TO9(*p); p++);  //第一个表达式的作用是跳过当前字符，因为在上面if语句中已经判断一次了
   }
@@ -111,7 +112,7 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
   {
     p++;
     if(!IS0TO9(*p))
-      return CJSON_ERR_NUMBER;
+      return CJSON_ERR_LITERAL;
     for(p++; IS0TO9(*p); p++);
   }
 
@@ -121,11 +122,15 @@ static CJSON_STATUS cjson_parse_number(cjson_context *c, cjson_value *v)
     if (*p == '+' || *p == '-')
       p++;
     if(!IS0TO9(*p))
-      return CJSON_ERR_NUMBER;
+      return CJSON_ERR_LITERAL;
     for(p++; IS0TO9(*p); p++);
   }
-
+  
+  errno = 0;  // http://c.biancheng.net/c/errno/  https://blog.csdn.net/jediael_lu/article/details/8589194
   v->u.num = strtod(c->json, NULL);
+  if (errno == ERANGE && (v->u.num == HUGE_VAL || v->u.num == -HUGE_VAL))
+    return CJSON_ERR_NUMBER_TOO_BIG;
+
   v->type = CJSON_NUMBER;
 
   c->json = p;
@@ -186,16 +191,18 @@ static void cjson_parse_utf8(cjson_context *c, uint32_t codepoint)
 
 static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, size_t *l) //解析出来的字符串长度不包括c语言规定的结尾字节 '\0'
 {
+  #define RETURN_STRING_ERR(err_code) do{c->top = head; return err_code;}while(0)
+
   size_t len, head = c->top;
   const char *p = c->json;
-  char ch = 0;
+  unsigned char ch = 0;
   uint16_t hex = 0;   //utf8高代理项、BMP平面内码点
   uint32_t codepoint = 0; //utf8码点
 
   if(*p == '\"')
     p++;
   else
-    return CJSON_ERR_STRING_MISS_QUOTATION_MARK;
+    RETURN_STRING_ERR(CJSON_ERR_STRING_MISS_QUOTATION_MARK);
 
   while(1)
   {
@@ -216,7 +223,7 @@ static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, siz
           case '/':  PUSH_CHAR_TO_STACK(c, '/');  break;
           case 'u':
             if(cjson_parse_4hex(p, &hex) != CJSON_OK)
-              return CJSON_ERR_UNICODE_HEX;
+              RETURN_STRING_ERR(CJSON_ERR_UNICODE_HEX);
             p += 4;
             codepoint = hex;
 
@@ -224,12 +231,14 @@ static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, siz
             {
               uint16_t hex2 = 0;
               if(*p++ != '\\')
-                return CJSON_ERR_UNICODE_SURROGATE;
+                RETURN_STRING_ERR(CJSON_ERR_UNICODE_SURROGATE);
               if(*p++ != 'u')
-                return CJSON_ERR_UNICODE_SURROGATE;
+                RETURN_STRING_ERR(CJSON_ERR_UNICODE_SURROGATE);
 
               if(cjson_parse_4hex(p, &hex2) != CJSON_OK)  //hex2 为低代理项
-                return CJSON_ERR_UNICODE_HEX;
+                RETURN_STRING_ERR(CJSON_ERR_UNICODE_HEX);
+              if (hex2 < 0xDC00 || hex2 > 0xDFFF)
+                RETURN_STRING_ERR(CJSON_ERR_UNICODE_SURROGATE);
               p += 4;
 
               codepoint = 0x10000 + (hex - 0xd800) * 0x400 + (hex2 - 0xdc00);
@@ -237,15 +246,18 @@ static CJSON_STATUS cjson_parse_string_raw(cjson_context *c, const char **s, siz
             cjson_parse_utf8(c, codepoint);
             break;    //utf-8
           default:
-            return CJSON_ERR_STRING_INVALID_ESCAPE_CAHR;
+            RETURN_STRING_ERR(CJSON_ERR_STRING_INVALID_ESCAPE);
         }
         break;
 
       case '\0':  //字符串中不能有结束符
-        return CJSON_ERR_STRING_MISS_QUOTATION_MARK;
+        RETURN_STRING_ERR(CJSON_ERR_STRING_MISS_QUOTATION_MARK);
 
       default:    //普通合法字符
-        PUSH_CHAR_TO_STACK(c, ch);
+        if(ch < 0x20)
+          RETURN_STRING_ERR(CJSON_ERR_STRING_INVALID_CAHR);
+        else
+          PUSH_CHAR_TO_STACK(c, ch);
         break;
 
       case '\"':  //字符串结束引号
@@ -330,9 +342,9 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
 
 static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
 {
-  CJSON_STATUS ret;
+  CJSON_STATUS ret = 0;
   size_t size = 0;
-  cjson_member member;
+  cjson_member member = {0};
 
   c->json++;  //跳过 '{'
 
@@ -374,6 +386,7 @@ static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
       return ret;
 
     memcpy((cjson_member *)cjson_push(c, sizeof(cjson_member)), &member, sizeof(cjson_member));
+    member.key = NULL;  //memcpy是浅复制，只是把member.key指针复制到stack中了，但是它指向的内存没有重新申请，所有权转移了
     size++;
 
     cjson_parse_skip_space(c);
@@ -385,6 +398,7 @@ static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
     }
     else if(*c->json == '}')
     {
+      c->json++;
       v->type = CJSON_OBJECT;
       v->u.obj.size = size;
 
@@ -393,9 +407,14 @@ static CJSON_STATUS cjson_parse_object(cjson_context *c, cjson_value *v)
       memcpy(v->u.obj.members = (cjson_member *)malloc(size), cjson_pop(c, size), size);
       return CJSON_OK;
     }
+    else
+    {
+      ret = CJSON_ERR_OBJECT_NEED_COMMA_OR_SQUARE_BRACKET;
+      break;
+    }
   }
 
-  free(member.key);
+  free(member.key);   //上一循环中如果在member入队之后break的，那么此时member.key为NULL
   for(size_t i = 0; i < size; i++)
   {
     cjson_member *m;
@@ -418,8 +437,9 @@ static CJSON_STATUS cjson_parse_value(cjson_context *c, cjson_value *v)
     case 't':  ret = cjson_parse_literal(c, v, "true", CJSON_TRUE);   break;
     case 'f':  ret = cjson_parse_literal(c, v, "false", CJSON_FALSE); break;
     case '\"': ret = cjson_parse_string(c, v); break;
-    case '[':  ret = cjson_parse_array(c, v); break;
+    case '[':  ret = cjson_parse_array(c, v);  break;
     case '{':  ret = cjson_parse_object(c, v); break;
+    case '\0': ret = CJSON_ERR_MISS_VALUE;     break;
     default:   ret = cjson_parse_number(c, v); break;
   }
 
@@ -523,10 +543,23 @@ CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
   CJSON_STATUS ret;
   cjson_context c = {0};
   c.json = json;
+  c.stack = NULL;
+  c.size = c.top = 0;
 
   cjson_value_init(v);
 
-  return cjson_parse_value(&c, v);
+  if((ret = cjson_parse_value(&c, v)) == CJSON_OK)
+  {
+    cjson_parse_skip_space(&c);
+    if(*c.json != '\0')
+    {
+      v->type = CJSON_NULL;
+      ret = CJSON_ERR_ROOT_NOT_SINGULAR;
+    }
+  }
+  assert(c.top == 0);
+  free(c.stack);
+  return ret;
 }
 
 void cjson_value_init(cjson_value *value)

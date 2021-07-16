@@ -6,17 +6,20 @@
 
 typedef enum{
   CJSON_OK,
-  CJSON_ERR_LITERAL,      //文字解析错误
-  CJSON_ERR_NUMBER,
-  CJSON_ERR_STRING_MISS_QUOTATION_MARK,       //缺少双引号
-  CJSON_ERR_STRING_INVALID_ESCAPE_CAHR,       //转义字符错误
+  CJSON_ERR_MISS_VALUE,
+  CJSON_ERR_ROOT_NOT_SINGULAR,                    //解析根错误
+  CJSON_ERR_LITERAL,                              //文字解析错误
+  CJSON_ERR_NUMBER_TOO_BIG,
+  CJSON_ERR_STRING_MISS_QUOTATION_MARK,           //缺少双引号
+  CJSON_ERR_STRING_INVALID_ESCAPE,                //转义字符错误
+  CJSON_ERR_STRING_INVALID_CAHR,                  //字符为小于0x20的控制字符
   CJSON_ERR_STACK,
-  CJSON_ERR_UNICODE_HEX,  //utf8 16进制解析错误
-  CJSON_ERR_UNICODE_SURROGATE,   //utf8 代理项错误
+  CJSON_ERR_UNICODE_HEX,                          //utf8 16进制解析错误
+  CJSON_ERR_UNICODE_SURROGATE,                    //utf8 代理项错误
   CJSON_ERR_ARRAY_NEED_COMMA_OR_SQUARE_BRACKET,   //数组缺少 ',' 或者 ']'
-  // CJSON_ERR_ARRAY_END_WITH_COMMA  //数组最后结尾是逗号
-  CJSON_ERR_OBJECT_NEED_KEY,   //对象缺少key
-  CJSON_ERR_OBJECT_NEED_COLON   //对象缺少冒号
+  CJSON_ERR_OBJECT_NEED_KEY,                      //对象缺少key
+  CJSON_ERR_OBJECT_NEED_COLON,                    //对象缺少冒号
+  CJSON_ERR_OBJECT_NEED_COMMA_OR_SQUARE_BRACKET   //对象缺少 ',' 或者 '}'
 }CJSON_STATUS;
 
 typedef enum{
@@ -29,8 +32,6 @@ typedef enum{
   CJSON_OBJECT
 }cjson_type;
 
-// typedef struct cjson_value cjson_value;
-
 typedef struct cjson_member__ cjson_member;
 typedef struct cjson_value__
 {
@@ -42,19 +43,19 @@ typedef struct cjson_value__
     struct
     {
       char *buf;
-      size_t l;
+      size_t l;   //不包括结尾 '\0'
     }str;
 
     struct
     {
       struct cjson_value__* elements;
       size_t size;  //元素个数
-    }arr;   //数组
+    }arr;    //数组
 
     struct
     {
       cjson_member *members;
-      size_t size;
+      size_t size;  //成员个数
     }obj;
   }u;
 }cjson_value;
