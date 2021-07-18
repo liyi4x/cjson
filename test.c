@@ -205,16 +205,15 @@ static void test_prase_object() {
     TEST_DOUBLE(i + 1.0, cjson_get_number(*e));
   }
   TEST_STRING("o", cjson_get_object_key(v, 6), cjson_get_object_key_length(v, 6));
-  {
-    cjson_value* o = cjson_get_object_value(v, 6);
-    TEST_INT(CJSON_OBJECT, cjson_get_type(*o));
-    for (i = 0; i < 3; i++) {
-      cjson_value* ov = cjson_get_object_value(*o, i);
-      TEST_BASE(('1' + i == cjson_get_object_key(*o, i)[0]) != 0, "true", "false", "%s");
-      TEST_SIZE_T(1, cjson_get_object_key_length(*o, i));
-      TEST_INT(CJSON_NUMBER, cjson_get_type(*ov));
-      TEST_DOUBLE(i + 1.0, cjson_get_number(*ov));
-    }
+  
+  cjson_value* o = cjson_get_object_value(v, 6);
+  TEST_INT(CJSON_OBJECT, cjson_get_type(*o));
+  for (i = 0; i < 3; i++) {
+    cjson_value* ov = cjson_get_object_value(*o, i);
+    TEST_BASE(('1' + i == cjson_get_object_key(*o, i)[0]) != 0, "true", "false", "%s");
+    TEST_SIZE_T(1, cjson_get_object_key_length(*o, i));
+    TEST_INT(CJSON_NUMBER, cjson_get_type(*ov));
+    TEST_DOUBLE(i + 1.0, cjson_get_number(*ov));
   }
   cjson_value_free(&v);
 }
@@ -428,271 +427,267 @@ static void test_stringify() {
 }
 
 
-
 #define TEST_EQUAL(json1, json2, equality) \
-    do {\
-        cjson_value v1 = {0}, v2 = {0};\
-        cjson_value_init(&v1);\
-        cjson_value_init(&v2);\
-        TEST_INT(CJSON_OK, cjson_parse(&v1, json1));\
-        TEST_INT(CJSON_OK, cjson_parse(&v2, json2));\
-        TEST_INT(equality, cjson_is_equal(&v1, &v2));\
-        cjson_value_free(&v1);\
-        cjson_value_free(&v2);\
-    } while(0)
+  do {\
+    cjson_value v1 = {0}, v2 = {0};\
+    cjson_value_init(&v1);\
+    cjson_value_init(&v2);\
+    TEST_INT(CJSON_OK, cjson_parse(&v1, json1));\
+    TEST_INT(CJSON_OK, cjson_parse(&v2, json2));\
+    TEST_INT(equality, cjson_is_equal(&v1, &v2));\
+    cjson_value_free(&v1);\
+    cjson_value_free(&v2);\
+  } while(0)
 
 static void test_equal() {
-    TEST_EQUAL("true", "true", 1);
-    TEST_EQUAL("true", "false", 0);
-    TEST_EQUAL("false", "false", 1);
-    TEST_EQUAL("null", "null", 1);
-    TEST_EQUAL("null", "0", 0);
-    TEST_EQUAL("123", "123", 1);
-    TEST_EQUAL("123", "456", 0);
-    TEST_EQUAL("\"abc\"", "\"abc\"", 1);
-    TEST_EQUAL("\"abc\"", "\"abcd\"", 0);
-    TEST_EQUAL("[]", "[]", 1);
-    TEST_EQUAL("[]", "null", 0);
-    TEST_EQUAL("[1,2,3]", "[1,2,3]", 1);
-    TEST_EQUAL("[1,2,3]", "[1,2,3,4]", 0);
-    TEST_EQUAL("[[]]", "[[]]", 1);
-    TEST_EQUAL("{}", "{}", 1);
-    TEST_EQUAL("{}", "null", 0);
-    TEST_EQUAL("{}", "[]", 0);
-    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2}", 1);
-    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}", 1);  //键值对顺序不同
-    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":3}", 0);
-    TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2,\"c\":3}", 0);
-    TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":{}}}}", 1);
-    TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":[]}}}", 0);
+  TEST_EQUAL("true", "true", 1);
+  TEST_EQUAL("true", "false", 0);
+  TEST_EQUAL("false", "false", 1);
+  TEST_EQUAL("null", "null", 1);
+  TEST_EQUAL("null", "0", 0);
+  TEST_EQUAL("123", "123", 1);
+  TEST_EQUAL("123", "456", 0);
+  TEST_EQUAL("\"abc\"", "\"abc\"", 1);
+  TEST_EQUAL("\"abc\"", "\"abcd\"", 0);
+  TEST_EQUAL("[]", "[]", 1);
+  TEST_EQUAL("[]", "null", 0);
+  TEST_EQUAL("[1,2,3]", "[1,2,3]", 1);
+  TEST_EQUAL("[1,2,3]", "[1,2,3,4]", 0);
+  TEST_EQUAL("[[]]", "[[]]", 1);
+  TEST_EQUAL("{}", "{}", 1);
+  TEST_EQUAL("{}", "null", 0);
+  TEST_EQUAL("{}", "[]", 0);
+  TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2}", 1);
+  TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"b\":2,\"a\":1}", 1);  //键值对顺序不同
+  TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":3}", 0);
+  TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2,\"c\":3}", 0);
+  TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":{}}}}", 1);
+  TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":[]}}}", 0);
 }
 
 static void test_copy() {
-    cjson_value v1 = {0}, v2 = {0};
-    cjson_value_init(&v1);
-    cjson_parse(&v1, "{\"t\":true,\"f\":false,\"n\":null,\"d\":1.5,\"a\":[1,2,3]}");
-    cjson_value_init(&v2);
-    cjson_copy(&v2, &v1);
-    TEST_BASE((cjson_is_equal(&v2, &v1)) != 0, "true", "false", "%s");
-    cjson_value_free(&v1);
-    cjson_value_free(&v2);
+  cjson_value v1 = {0}, v2 = {0};
+  cjson_value_init(&v1);
+  cjson_parse(&v1, "{\"t\":true,\"f\":false,\"n\":null,\"d\":1.5,\"a\":[1,2,3]}");
+  cjson_value_init(&v2);
+  cjson_copy(&v2, &v1);
+  TEST_BASE((cjson_is_equal(&v2, &v1)) != 0, "true", "false", "%s");
+  cjson_value_free(&v1);
+  cjson_value_free(&v2);
 }
 
 static void test_move() {
-    cjson_value v1, v2, v3;
-    cjson_value_init(&v1);
-    cjson_parse(&v1, "{\"t\":true,\"f\":false,\"n\":null,\"d\":1.5,\"a\":[1,2,3]}");
-    cjson_value_init(&v2);
-    cjson_copy(&v2, &v1);
-    cjson_value_init(&v3);
-    cjson_move(&v3, &v2);
-    TEST_INT(CJSON_OK, cjson_get_type(v2));
-    TEST_BASE((cjson_is_equal(&v3, &v1)) != 0, "true", "false", "%s");
-    cjson_value_free(&v1);
-    cjson_value_free(&v2);
-    cjson_value_free(&v3);
+  cjson_value v1, v2, v3;
+  cjson_value_init(&v1);
+  cjson_parse(&v1, "{\"t\":true,\"f\":false,\"n\":null,\"d\":1.5,\"a\":[1,2,3]}");
+  cjson_value_init(&v2);
+  cjson_copy(&v2, &v1);
+  cjson_value_init(&v3);
+  cjson_move(&v3, &v2);
+  TEST_INT(CJSON_OK, cjson_get_type(v2));
+  TEST_BASE((cjson_is_equal(&v3, &v1)) != 0, "true", "false", "%s");
+  cjson_value_free(&v1);
+  cjson_value_free(&v2);
+  cjson_value_free(&v3);
 }
 
 static void test_swap() {
-    cjson_value v1, v2;
-    cjson_value_init(&v1);
-    cjson_value_init(&v2);
-    cjson_set_string(&v1, "Hello",  5);
-    cjson_set_string(&v2, "World!", 6);
-    cjson_swap(&v1, &v2);
-    TEST_STRING("World!", cjson_get_string(v1), cjson_get_string_length(v1));
-    TEST_STRING("Hello",  cjson_get_string(v2), cjson_get_string_length(v2));
-    cjson_value_free(&v1);
-    cjson_value_free(&v2);
+  cjson_value v1, v2;
+  cjson_value_init(&v1);
+  cjson_value_init(&v2);
+  cjson_set_string(&v1, "Hello",  5);
+  cjson_set_string(&v2, "World!", 6);
+  cjson_swap(&v1, &v2);
+  TEST_STRING("World!", cjson_get_string(v1), cjson_get_string_length(v1));
+  TEST_STRING("Hello",  cjson_get_string(v2), cjson_get_string_length(v2));
+  cjson_value_free(&v1);
+  cjson_value_free(&v2);
 }
 
 static void test_access_null() {
-    cjson_value v;
-    cjson_value_init(&v);
-    cjson_set_string(&v, "a", 1);
-    cjson_set_null(&v);
-    TEST_INT(CJSON_NULL, cjson_get_type(v));
-    cjson_value_free(&v);
+  cjson_value v;
+  cjson_value_init(&v);
+  cjson_set_string(&v, "a", 1);
+  cjson_set_null(&v);
+  TEST_INT(CJSON_NULL, cjson_get_type(v));
+  cjson_value_free(&v);
 }
 
 static void test_access_boolean() {
-    cjson_value v;
-    cjson_value_init(&v);
-    cjson_set_string(&v, "a", 1);
-    cjson_set_boolean(&v, 1);
-    TEST_TRUE(cjson_get_boolean(v));
-    cjson_set_boolean(&v, 0);
-    TEST_FALSE(cjson_get_boolean(v));
-    cjson_value_free(&v);
+  cjson_value v;
+  cjson_value_init(&v);
+  cjson_set_string(&v, "a", 1);
+  cjson_set_boolean(&v, 1);
+  TEST_TRUE(cjson_get_boolean(v));
+  cjson_set_boolean(&v, 0);
+  TEST_FALSE(cjson_get_boolean(v));
+  cjson_value_free(&v);
 }
 
 static void test_access_number() {
-    cjson_value v;
-    cjson_value_init(&v);
-    cjson_set_string(&v, "a", 1);
-    cjson_set_number(&v, 1234.5);
-    TEST_DOUBLE(1234.5, cjson_get_number(v));
-    cjson_value_free(&v);
+  cjson_value v;
+  cjson_value_init(&v);
+  cjson_set_string(&v, "a", 1);
+  cjson_set_number(&v, 1234.5);
+  TEST_DOUBLE(1234.5, cjson_get_number(v));
+  cjson_value_free(&v);
 }
 
 static void test_access_string() {
-    cjson_value v;
-    cjson_value_init(&v);
-    cjson_set_string(&v, "", 0);
-    TEST_STRING("", cjson_get_string(v), cjson_get_string_length(v));
-    cjson_set_string(&v, "Hello", 5);
-    TEST_STRING("Hello", cjson_get_string(v), cjson_get_string_length(v));
-    cjson_value_free(&v);
+  cjson_value v;
+  cjson_value_init(&v);
+  cjson_set_string(&v, "", 0);
+  TEST_STRING("", cjson_get_string(v), cjson_get_string_length(v));
+  cjson_set_string(&v, "Hello", 5);
+  TEST_STRING("Hello", cjson_get_string(v), cjson_get_string_length(v));
+  cjson_value_free(&v);
 }
 
 static void test_access_array() {
-    cjson_value a, e;
-    size_t i, j;
+  cjson_value a, e;
+  size_t i, j;
 
-    cjson_value_init(&a);
+  cjson_value_init(&a);
 
-    for (j = 0; j <= 5; j += 5) {
-        cjson_init_array(&a, j);
-        TEST_SIZE_T(0, cjson_get_array_size(a));
-        TEST_SIZE_T(j, cjson_get_array_capacity(a));
-        for (i = 0; i < 10; i++) {
-            cjson_value_init(&e);
-            cjson_set_number(&e, i);
-            cjson_move(cjson_pushback_array_element(&a), &e);
-            cjson_value_free(&e);
-        }
-
-        TEST_SIZE_T(10, cjson_get_array_size(a));
-        for (i = 0; i < 10; i++)
-            TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
-    }
-
-    cjson_popback_array_element(&a);
-    TEST_SIZE_T(9, cjson_get_array_size(a));
-    for (i = 0; i < 9; i++)
-        TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
-
-    cjson_erase_array_element(&a, 4, 0);
-    TEST_SIZE_T(9, cjson_get_array_size(a));
-    for (i = 0; i < 9; i++)
-        TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
-
-    cjson_erase_array_element(&a, 8, 1);
-    TEST_SIZE_T(8, cjson_get_array_size(a));
-    for (i = 0; i < 8; i++)
-        TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
-
-    cjson_erase_array_element(&a, 0, 2);
-    TEST_SIZE_T(6, cjson_get_array_size(a));
-    for (i = 0; i < 6; i++)
-        TEST_DOUBLE((double)i + 2, cjson_get_number(*cjson_get_array_element(a, i)));
-
-#if 0
-    for (i = 0; i < 2; i++) {
-        cjson_value_init(&e);
-        cjson_set_number(&e, i);
-        cjson_move(cjson_insert_array_element(&a, i), &e);
-        cjson_value_free(&e);
-    }
-#endif
-    
-    TEST_SIZE_T(8, cjson_get_array_size(a));
-    for (i = 0; i < 8; i++)
-        TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
-
-    TEST_TRUE(cjson_get_array_capacity(a) > 8);
-    cjson_shrink_array(&a);
-    TEST_SIZE_T(8, cjson_get_array_capacity(a));
-    TEST_SIZE_T(8, cjson_get_array_size(a));
-    for (i = 0; i < 8; i++)
-        TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
-
-    cjson_set_string(&e, "Hello", 5);
-    cjson_move(cjson_pushback_array_element(&a), &e);     /* Test if element is freed */
-    cjson_value_free(&e);
-
-    i = cjson_get_array_capacity(a);
-    cjson_clear_array_element(&a);
+  for (j = 0; j <= 5; j += 5) {
+    cjson_init_array(&a, j);
     TEST_SIZE_T(0, cjson_get_array_size(a));
-    TEST_SIZE_T(i, cjson_get_array_capacity(a));   /* capacity remains unchanged */
-    cjson_shrink_array(&a);
-    TEST_SIZE_T(0, cjson_get_array_capacity(a));
+    TEST_SIZE_T(j, cjson_get_array_capacity(a));
+    for (i = 0; i < 10; i++) {
+      cjson_value_init(&e);
+      cjson_set_number(&e, i);
+      cjson_move(cjson_pushback_array_element(&a), &e);
+      cjson_value_free(&e);
+    }
 
-    cjson_value_free(&a);
+    TEST_SIZE_T(10, cjson_get_array_size(a));
+    for (i = 0; i < 10; i++)
+      TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
+  }
+
+  cjson_popback_array_element(&a);
+  TEST_SIZE_T(9, cjson_get_array_size(a));
+  for (i = 0; i < 9; i++)
+    TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
+
+  cjson_erase_array_element(&a, 4, 0);
+  TEST_SIZE_T(9, cjson_get_array_size(a));
+  for (i = 0; i < 9; i++)
+    TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
+
+  cjson_erase_array_element(&a, 8, 1);
+  TEST_SIZE_T(8, cjson_get_array_size(a));
+  for (i = 0; i < 8; i++)
+    TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
+
+  cjson_erase_array_element(&a, 0, 2);
+  TEST_SIZE_T(6, cjson_get_array_size(a));
+  for (i = 0; i < 6; i++)
+    TEST_DOUBLE((double)i + 2, cjson_get_number(*cjson_get_array_element(a, i)));
+
+
+  for (i = 0; i < 2; i++) {
+    cjson_value_init(&e);
+    cjson_set_number(&e, i);
+    cjson_move(cjson_insert_array_element(&a, i), &e);
+    cjson_value_free(&e);
+  }
+
+  TEST_SIZE_T(8, cjson_get_array_size(a));
+  for (i = 0; i < 8; i++)
+    TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
+
+  TEST_TRUE(cjson_get_array_capacity(a) > 8);
+  cjson_shrink_array(&a);
+  TEST_SIZE_T(8, cjson_get_array_capacity(a));
+  TEST_SIZE_T(8, cjson_get_array_size(a));
+  for (i = 0; i < 8; i++)
+    TEST_DOUBLE((double)i, cjson_get_number(*cjson_get_array_element(a, i)));
+
+  cjson_set_string(&e, "Hello", 5);
+  cjson_move(cjson_pushback_array_element(&a), &e);     /* Test if element is freed */
+  cjson_value_free(&e);
+
+  i = cjson_get_array_capacity(a);
+  cjson_clear_array_element(&a);
+  TEST_SIZE_T(0, cjson_get_array_size(a));
+  TEST_SIZE_T(i, cjson_get_array_capacity(a));   /* capacity remains unchanged */
+  cjson_shrink_array(&a);
+  TEST_SIZE_T(0, cjson_get_array_capacity(a));
+
+  cjson_value_free(&a);
 }
 
-// static void test_access_object() {
-// #if 0
-//     cjson_value o, v, *pv;
-//     size_t i, j, index;
+static void test_access_object() {
+  cjson_value o, v, *pv;
+  size_t i, j, index;
 
-//     cjson_value_init(&o);
+  cjson_value_init(&o);
 
-//     for (j = 0; j <= 5; j += 5) {
-//         cjson_set_object(&o, j);
-//         TEST_SIZE_T(0, cjson_get_object_size(&o));
-//         TEST_SIZE_T(j, cjson_get_object_capacity(&o));
-//         for (i = 0; i < 10; i++) {
-//             char key[2] = "a";
-//             key[0] += i;
-//             cjson_value_init(&v);
-//             cjson_set_number(&v, i);
-//             cjson_move(cjson_set_object_value(&o, key, 1), &v);
-//             cjson_value_free(&v);
-//         }
-//         TEST_SIZE_T(10, cjson_get_object_size(&o));
-//         for (i = 0; i < 10; i++) {
-//             char key[] = "a";
-//             key[0] += i;
-//             index = cjson_find_object_index(&o, key, 1);
-//             EXPECT_TRUE(index != LEPT_KEY_NOT_EXIST);
-//             pv = cjson_get_object_value(&o, index);
-//             TEST_DOUBLE((double)i, cjson_get_number(pv));
-//         }
-//     }
+  for (j = 0; j <= 5; j += 5) {
+    cjson_init_object(&o, j);
+    TEST_SIZE_T(0, cjson_get_object_size(o));
+    TEST_SIZE_T(j, cjson_get_object_capacity(o));
+    for (i = 0; i < 10; i++) {
+      char key[2] = "a";
+      key[0] += i;
+      cjson_value_init(&v);
+      cjson_set_number(&v, i);
+      cjson_move(cjson_set_object_value(&o, key, 1), &v);
+      cjson_value_free(&v);
+    }
+    TEST_SIZE_T(10, cjson_get_object_size(o));
+    for (i = 0; i < 10; i++) {
+      char key[] = "a";
+      key[0] += i;
+      index = cjson_find_object_index(o, key, 1);
+      TEST_TRUE(index != CJSON_KEY_NOT_EXIST);
+      pv = cjson_get_object_value(o, index);
+      TEST_DOUBLE((double)i, cjson_get_number(*pv));
+    }
+  }
 
-//     index = cjson_find_object_index(&o, "j", 1);    
-//     EXPECT_TRUE(index != LEPT_KEY_NOT_EXIST);
-//     cjson_remove_object_value(&o, index);
-//     index = cjson_find_object_index(&o, "j", 1);
-//     EXPECT_TRUE(index == LEPT_KEY_NOT_EXIST);
-//     TEST_SIZE_T(9, cjson_get_object_size(&o));
+  index = cjson_find_object_index(o, "j", 1);    
+  TEST_TRUE(index != CJSON_KEY_NOT_EXIST);
+  cjson_remove_object_value(&o, index);
+  index = cjson_find_object_index(o, "j", 1);
+  TEST_TRUE(index == CJSON_KEY_NOT_EXIST);
+  TEST_SIZE_T(9, cjson_get_object_size(o));
 
-//     index = cjson_find_object_index(&o, "a", 1);
-//     EXPECT_TRUE(index != LEPT_KEY_NOT_EXIST);
-//     cjson_remove_object_value(&o, index);
-//     index = cjson_find_object_index(&o, "a", 1);
-//     EXPECT_TRUE(index == LEPT_KEY_NOT_EXIST);
-//     TEST_SIZE_T(8, cjson_get_object_size(&o));
+  index = cjson_find_object_index(o, "a", 1);
+  TEST_TRUE(index != CJSON_KEY_NOT_EXIST);
+  cjson_remove_object_value(&o, index);
+  index = cjson_find_object_index(o, "a", 1);
+  TEST_TRUE(index == CJSON_KEY_NOT_EXIST);
+  TEST_SIZE_T(8, cjson_get_object_size(o));
 
-//     EXPECT_TRUE(cjson_get_object_capacity(&o) > 8);
-//     cjson_shrink_object(&o);
-//     TEST_SIZE_T(8, cjson_get_object_capacity(&o));
-//     TEST_SIZE_T(8, cjson_get_object_size(&o));
-//     for (i = 0; i < 8; i++) {
-//         char key[] = "a";
-//         key[0] += i + 1;
-//         TEST_DOUBLE((double)i + 1, cjson_get_number(cjson_get_object_value(&o, cjson_find_object_index(&o, key, 1))));
-//     }
+  TEST_TRUE(cjson_get_object_capacity(o) > 8);
+  cjson_shrink_object(&o);
+  TEST_SIZE_T(8, cjson_get_object_capacity(o));
+  TEST_SIZE_T(8, cjson_get_object_size(o));
+  for (i = 0; i < 8; i++) {
+    char key[] = "a";
+    key[0] += i + 1;
+    TEST_DOUBLE((double)i + 1, cjson_get_number(*cjson_get_object_value(o, cjson_find_object_index(o, key, 1))));
+  }
 
-//     cjson_set_string(&v, "Hello", 5);
-//     cjson_move(cjson_set_object_value(&o, "World", 5), &v); /* Test if element is freed */
-//     cjson_value_free(&v);
+  cjson_set_string(&v, "Hello", 5);
+  cjson_move(cjson_set_object_value(&o, "World", 5), &v); /* Test if element is freed */
+  cjson_value_free(&v);
 
-//     pv = cjson_find_object_value(&o, "World", 5);
-//     EXPECT_TRUE(pv != NULL);
-//     EXPECT_EQ_STRING("Hello", cjson_get_string(pv), cjson_get_string_length(pv));
+  pv = cjson_find_object_value(o, "World", 5);
+  TEST_TRUE(pv != NULL);
+  TEST_STRING("Hello", cjson_get_string(*pv), cjson_get_string_length(*pv));
 
-//     i = cjson_get_object_capacity(&o);
-//     cjson_clear_object(&o);
-//     TEST_SIZE_T(0, cjson_get_object_size(&o));
-//     TEST_SIZE_T(i, cjson_get_object_capacity(&o)); /* capacity remains unchanged */
-//     cjson_shrink_object(&o);
-//     TEST_SIZE_T(0, cjson_get_object_capacity(&o));
+  i = cjson_get_object_capacity(o);
+  cjson_clear_object(&o);
+  TEST_SIZE_T(0, cjson_get_object_size(o));
+  TEST_SIZE_T(i, cjson_get_object_capacity(o)); /* capacity remains unchanged */
+  cjson_shrink_object(&o);
+  TEST_SIZE_T(0, cjson_get_object_capacity(o));
 
-//     cjson_value_free(&o);
-// #endif
-// }
+  cjson_value_free(&o);
+}
 
 static void test_access() {
     test_access_null();
@@ -700,7 +695,7 @@ static void test_access() {
     test_access_number();
     test_access_string();
     test_access_array();
-    // test_access_object();
+    test_access_object();
 }
 
 

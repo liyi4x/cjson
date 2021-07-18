@@ -22,6 +22,8 @@ typedef enum{
   CJSON_ERR_OBJECT_NEED_COMMA_OR_SQUARE_BRACKET   //对象缺少 ',' 或者 '}'
 }CJSON_STATUS;
 
+#define CJSON_KEY_NOT_EXIST  ((size_t)-1)
+
 typedef enum{
   CJSON_NULL,
   CJSON_TRUE,
@@ -57,6 +59,7 @@ typedef struct cjson_value__
     {
       cjson_member *members;
       size_t size;  //成员个数
+      size_t capacity;  //动态数组容量
     }obj;
   }u;
 }cjson_value;
@@ -108,9 +111,17 @@ void cjson_erase_array_element(cjson_value *value, size_t index, size_t count);
 void cjson_clear_array_element(cjson_value *value);
 
 size_t cjson_get_object_size(cjson_value value);
+size_t cjson_get_object_capacity(cjson_value value);
 const char *cjson_get_object_key(cjson_value value, size_t index);
 size_t cjson_get_object_key_length(cjson_value value, size_t index);
 cjson_value *cjson_get_object_value(cjson_value value, size_t index);
+void cjson_init_object(cjson_value *value, size_t cap);
+cjson_value *cjson_set_object_value(cjson_value *value, const char* key, size_t klen);
+size_t cjson_find_object_index(cjson_value value, const char* key, size_t klen);
+cjson_value *cjson_find_object_value(cjson_value value, const char* key, size_t klen);
+void cjson_remove_object_value(cjson_value *value, size_t index);
+void cjson_clear_object(cjson_value *value);
+void cjson_shrink_object(cjson_value *value);
 
 
 

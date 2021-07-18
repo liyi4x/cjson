@@ -826,8 +826,9 @@ void cjson_resize_array(cjson_value *value)
   assert(value->type == CJSON_ARRAY);
   if(value->u.arr.capacity <= value->u.arr.size)
   {
-    value->u.arr.capacity = value->u.arr.capacity == 0? 1 : value->u.arr.capacity + value->u.arr.capacity >> 1;
-    value->u.arr.elements = (cjson_value *)realloc(value->u.arr.elements, value->u.arr.capacity);
+    // value->u.arr.capacity = value->u.arr.capacity == 0? 1 : value->u.arr.capacity + value->u.arr.capacity >> 1; //这里不能把数组容量扩大到1.5倍，cap为1，这个最终结果还是1
+    value->u.arr.capacity = value->u.arr.capacity == 0? 1 : value->u.arr.capacity << 1; //这里不能把数组容量扩大到1.5倍，cap为1，这个最终结果还是1
+    value->u.arr.elements = (cjson_value *)realloc(value->u.arr.elements, value->u.arr.capacity * sizeof(cjson_value));
   }
 }
 cjson_value *cjson_pushback_array_element(cjson_value *value)
@@ -857,7 +858,7 @@ cjson_value *cjson_insert_array_element(cjson_value *value, size_t index)
   if(value->u.arr.size >= value->u.arr.capacity)
     cjson_resize_array(value);
 
-  memmove(value->u.arr.elements + index, value->u.arr.elements + index + 1, sizeof(cjson_value) * (value->u.arr.size - index));
+  memmove(value->u.arr.elements + index + 1, value->u.arr.elements + index, sizeof(cjson_value) * (value->u.arr.size - index));
   value->u.arr.size++;
 
   return value->u.arr.elements + index;
@@ -867,14 +868,14 @@ void cjson_erase_array_element(cjson_value *value, size_t index, size_t count)
 {
   assert(value != NULL);
   assert(value->type == CJSON_ARRAY);
-  assert(index + count < value->u.arr.size);
+  assert(index + count <= value->u.arr.size);   //一共9个元素，index从8开始删除1个，即删除最后一共元素，所以这里需要等号
 
   for(size_t i = 0; i < count; i++)
   {
     cjson_value_free(value->u.arr.elements + index + i);
   }
-  // cjson_move();
-  memmove(value->u.arr.elements + index, value->u.arr.elements + index + count, count * sizeof(cjson_value));
+  value->u.arr.size -= count;
+  memmove(value->u.arr.elements + index, value->u.arr.elements + index + count, sizeof(cjson_value) * (value->u.arr.size - index));
 }
 
 void cjson_clear_array_element(cjson_value *value)
@@ -890,13 +891,19 @@ void cjson_shrink_array(cjson_value *value)
   assert(value->type == CJSON_ARRAY);
 
   value->u.arr.capacity = value->u.arr.size;
-  value->u.arr.elements = realloc(value->u.arr.elements, value->u.arr.capacity);
+  value->u.arr.elements = realloc(value->u.arr.elements, value->u.arr.capacity * sizeof(cjson_value));
 }
 
 size_t cjson_get_object_size(cjson_value value)
 {
   assert(value.type == CJSON_OBJECT);
   return value.u.obj.size;
+}
+
+size_t cjson_get_object_capacity(cjson_value value)
+{
+  assert(value.type == CJSON_OBJECT);
+  return value.u.obj.capacity;
 }
 
 const char *cjson_get_object_key(cjson_value value, size_t index)
@@ -918,4 +925,101 @@ cjson_value *cjson_get_object_value(cjson_value value, size_t index)
   assert(value.type == CJSON_OBJECT);
   assert(value.u.obj.size > index);  //index为索引号，从0开始，size为元素数，从1开始
   return &((value.u.obj.members + index)->value);
+}
+
+void cjson_init_object(cjson_value *value, size_t cap)
+{
+  assert(value != NULL);
+
+  cjson_value_free(value);
+  value->type = CJSON_OBJECT;
+  value->u.obj.size = 0;
+  value->u.obj.capacity = cap;
+  value->u.obj.members = cap > 0 ? (cjson_member *)malloc(sizeof(cjson_member) * cap) : NULL;
+}
+
+void cjson_resize_object(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_OBJECT);
+
+  if(value->u.obj.capacity <= value->u.obj.size)
+  {
+    value->u.obj.capacity = value->u.obj.capacity == 0? 1 : value->u.obj.capacity << 1; //这里不能把容量扩大到1.5倍，cap为1，这个最终结果还是1
+    value->u.obj.members = (cjson_member *)realloc(value->u.obj.members, value->u.obj.capacity * sizeof(cjson_member));
+  }  
+}
+
+cjson_value *cjson_set_object_value(cjson_value *value, const char* key, size_t klen)
+{
+  assert(key != NULL && klen > 0);
+  assert(value != NULL);
+  assert(value->type == CJSON_OBJECT);
+
+  if(value->u.obj.size >= value->u.obj.capacity)
+    cjson_resize_object(value);
+
+  (value->u.obj.members + value->u.obj.size)->key_len = klen;
+  memcpy((value->u.obj.members + value->u.obj.size)->key = (char *)malloc(klen + 1), key, klen);
+  (value->u.obj.members + value->u.obj.size)->key[klen] = '\0';
+  
+  cjson_value_init(&(value->u.obj.members + value->u.obj.size)->value);
+  value->u.obj.size++;
+  return &(value->u.obj.members + value->u.obj.size - 1)->value;
+}
+
+size_t cjson_find_object_index(cjson_value value, const char* key, size_t klen)
+{
+  assert(key != NULL && klen > 0);
+  assert(value.type == CJSON_OBJECT);
+
+  for(size_t i = 0; i < value.u.obj.size; i++)
+  {
+    if(value.u.obj.members[i].key_len == klen && !memcmp(value.u.obj.members[i].key, key, klen))
+      return i;
+  }
+  return CJSON_KEY_NOT_EXIST;
+}
+
+cjson_value *cjson_find_object_value(cjson_value value, const char* key, size_t klen)
+{
+  size_t i = cjson_find_object_index(value, key, klen);
+  return i == CJSON_KEY_NOT_EXIST ? NULL : cjson_get_object_value(value, i);
+}
+
+void cjson_remove_object_value(cjson_value *value, size_t index)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_OBJECT);
+  assert(index < value->u.obj.size);
+
+  cjson_value_free(&value->u.obj.members[index].value); 
+  free(value->u.obj.members[index].key);
+
+  value->u.obj.size--;
+  memmove(value->u.obj.members + index, value->u.obj.members + index + 1, sizeof(cjson_member) * (value->u.obj.size - index));
+}   //类似erase array 顺序可优化
+
+void cjson_clear_object(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_OBJECT);
+
+  for(size_t i = 0; i < value->u.obj.size; i++)
+  {
+    cjson_value_free(&value->u.obj.members[i].value); 
+    free(value->u.obj.members[i].key);
+  }
+  value->u.arr.size = 0;
+}   //类似erase array 顺序可优化
+
+void cjson_shrink_object(cjson_value *value)
+{
+  assert(value != NULL);
+  assert(value->type == CJSON_OBJECT);
+  // assert(value->u.obj.capacity > value->u.obj.size);
+
+  value->u.obj.capacity = value->u.obj.size;
+  value->u.obj.members = realloc(value->u.obj.members, sizeof(cjson_member) * value->u.obj.size);
+
 }
