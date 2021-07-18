@@ -124,5 +124,4 @@ void cjson_clear_object(cjson_value *value);
 void cjson_shrink_object(cjson_value *value);
 
 
-
 #endif

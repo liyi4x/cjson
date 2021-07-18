@@ -14,7 +14,7 @@ typedef struct
 {
   const char *json;
 
-  char *stack;
+  char *stack;  //这个栈用于解析json时临时存放json值，当成功解析的时候再出栈，保存到cjson_value结构体中
   size_t top, size;
 }cjson_context;
 
@@ -23,6 +23,7 @@ typedef struct
 
 #define PUSH_CHAR_TO_STACK(c, ch) do{ *(char *)cjson_push(c, sizeof(char)) = ch; }while(0)
 
+//栈内存放的都是相同类型的数据，给定存入的字节数，返回一个指向该内存块的指针，用于赋值
 static void* cjson_push(cjson_context *c, size_t len)
 {
   void *ret;
@@ -45,6 +46,7 @@ static void* cjson_push(cjson_context *c, size_t len)
   return ret;
 }
 
+//根据传入的字节数，从栈顶往回推，返回这个内存块的地址，用于读取数据
 static void* cjson_pop(cjson_context *c, size_t len)
 {
   void *ret;
@@ -64,7 +66,7 @@ static void cjson_parse_skip_space(cjson_context *c)
   c->json = p;
 }
 
-static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const char* expect, cjson_type type)   //解析文字
+static CJSON_STATUS cjson_parse_literal(cjson_context *c, cjson_value *v, const char* expect, cjson_type type)   //解析文字null，true，false
 {
   char i = 0;
   const char *p = c->json;
@@ -332,7 +334,7 @@ static CJSON_STATUS cjson_parse_array(cjson_context *c, cjson_value *v)
     }
   }
 
-  for(size_t i = 0; i < size; i++)
+  for(size_t i = 0; i < size; i++)  //数组中某元素解析出错之后释放之前申请的空间
   {
     cjson_value_free((cjson_value *)cjson_pop(c, sizeof(cjson_value)));
   }
@@ -484,8 +486,7 @@ static void cjson_stringify_string(cjson_context *c, const char *str, size_t len
   c->top -=  len * 6 + 2 - (p - head);
 }
 
-#define CJSON_STRINGIFY_PUT_CHAR(c, ch) do{*(char *)cjson_push(c, sizeof(char)) = (ch);}while(0)
-static void cjson_stringify_value(cjson_context *c, const cjson_value *v)
+static void cjson_stringify_value(cjson_context *c, const cjson_value *v) //生成json字符串
 {
   char *s;
   size_t len;
@@ -495,29 +496,29 @@ static void cjson_stringify_value(cjson_context *c, const cjson_value *v)
     case CJSON_NULL: memcpy(cjson_push(c, 4), "null", 4); break;
     case CJSON_TRUE: memcpy(cjson_push(c, 4), "true", 4); break;
     case CJSON_FALSE: memcpy(cjson_push(c, 5), "false", 5); break;
-    case CJSON_NUMBER: c->top -= 32 - sprintf(cjson_push(c, 32), "%.17g", v->u.num); break;
+    case CJSON_NUMBER: c->top -= 32 - sprintf(cjson_push(c, 32), "%.17g", v->u.num); break; //数字的最长长度为32
     case CJSON_STRING: cjson_stringify_string(c, v->u.str.buf, v->u.str.l); break;
     case CJSON_ARRAY:
-      CJSON_STRINGIFY_PUT_CHAR(c, '[');
+      PUSH_CHAR_TO_STACK(c, '[');
       for(size_t i = 0; i < v->u.arr.size; i++)
       {
         if(i != 0)
-          CJSON_STRINGIFY_PUT_CHAR(c, ',');
+          PUSH_CHAR_TO_STACK(c, ',');
         cjson_stringify_value(c, (const cjson_value *)v->u.arr.elements + i);   //数组中的第i个元素
       }
-      CJSON_STRINGIFY_PUT_CHAR(c, ']');
+      PUSH_CHAR_TO_STACK(c, ']');
       break;
     case CJSON_OBJECT:
-      CJSON_STRINGIFY_PUT_CHAR(c, '{');
+      PUSH_CHAR_TO_STACK(c, '{');
       for(size_t i = 0; i < v->u.obj.size; i++)
       {
         if(i != 0)
-          CJSON_STRINGIFY_PUT_CHAR(c, ',');
+          PUSH_CHAR_TO_STACK(c, ',');
         cjson_stringify_string(c, v->u.obj.members[i].key, v->u.obj.members[i].key_len);
-        CJSON_STRINGIFY_PUT_CHAR(c, ':');
+        PUSH_CHAR_TO_STACK(c, ':');
         cjson_stringify_value(c, &v->u.obj.members[i].value);   //对象中的第i个key-value的 value
       }
-      CJSON_STRINGIFY_PUT_CHAR(c, '}');
+      PUSH_CHAR_TO_STACK(c, '}');
       break;
   }
 }
@@ -533,7 +534,7 @@ char *cjson_stringify(cjson_value v, size_t *length)
   if(length)
     *length = c.top;
 
-  *(char*)cjson_push(&c, sizeof(char)) = ('\0');
+  *(char*)cjson_push(&c, sizeof(char)) = '\0';
 
   return c.stack;
 }
@@ -562,7 +563,7 @@ CJSON_STATUS cjson_parse(cjson_value* v, const char *json)
   return ret;
 }
 
-void cjson_value_free(cjson_value *value)
+void cjson_value_free(cjson_value *value)   //释放value申请的内存，主要针对str，arr，obj类型
 {
   assert(value != NULL);
 
@@ -579,9 +580,6 @@ void cjson_value_free(cjson_value *value)
       }
       value->u.arr.size = 0;
       free(value->u.arr.elements);
-      break;
-    case CJSON_NUMBER:
-      value->u.num = 0;
       break;
     case CJSON_OBJECT:
       for(size_t i = 0; i < value->u.obj.size; i++)
@@ -619,17 +617,17 @@ int cjson_is_equal(const cjson_value* lhs, const cjson_value* rhs)
     case CJSON_STRING:
       ret = lhs->u.str.l == rhs->u.str.l && !memcmp(lhs->u.str.buf, rhs->u.str.buf, lhs->u.str.l);
       break;
-    case CJSON_ARRAY:
+    case CJSON_ARRAY:   //arr相同，内部元素顺序必须相同
       if(!(ret = lhs->u.arr.size == rhs->u.arr.size))
         break;
       for(size_t i = 0; i < lhs->u.arr.size; i++)
         if(!(ret = cjson_is_equal(&lhs->u.arr.elements[i], &rhs->u.arr.elements[i])))
           break;
       break;
-    case CJSON_OBJECT:
+    case CJSON_OBJECT:  //obj相同，内部键值对可能顺序不同
       if(!(ret = (lhs->u.obj.size == rhs->u.obj.size)))
         break;
-      // for(size_t i = 0; i < lhs->u.obj.size; i++)
+      // for(size_t i = 0; i < lhs->u.obj.size; i++)  //这个不能保证无序键值对相同
       // {
       //   if(!(ret = lhs->u.obj.members[i].key_len == rhs->u.obj.members[i].key_len\
       //         && !memcmp(lhs->u.obj.members[i].key, \
@@ -662,13 +660,7 @@ int cjson_is_equal(const cjson_value* lhs, const cjson_value* rhs)
 void cjson_copy(cjson_value *dest, const cjson_value *src)
 {
   assert(dest != NULL && src != NULL);
-  
-
-  // memset(dest, 0, sizeof(cjson_value)); //init;
-  
   dest->type = src->type;
-  // memcpy(dest, src, sizeof(cjson_value));
-
   switch(src->type)
   {
     case CJSON_NULL:
@@ -689,7 +681,7 @@ void cjson_copy(cjson_value *dest, const cjson_value *src)
 
       // size = sizeof(cjson_value) * cjson_get_array_size(*src);
       // dest->u.arr.elements = (cjson_value *)malloc(size);
-      // memcpy(dest->u.arr.elements, src->u.arr.elements, size);
+      // memcpy(dest->u.arr.elements, src->u.arr.elements, size);   //这个不能保证是深度复制，数组的元素需要全新的内存，这里可能内存被共享
       break;
 
     case CJSON_OBJECT:
@@ -720,7 +712,7 @@ void cjson_move(cjson_value *dest, cjson_value *src)
   cjson_value_init(src);
 }
 
-void cjson_swap(cjson_value *dest, cjson_value *src)
+void cjson_swap(cjson_value *dest, cjson_value *src)  //交换，如果是要把两个指针的指向交换的话，需要传入指针的指针
 {
   assert(dest != NULL && src != NULL);
   cjson_value tmp;
@@ -998,7 +990,7 @@ void cjson_remove_object_value(cjson_value *value, size_t index)
 
   value->u.obj.size--;
   memmove(value->u.obj.members + index, value->u.obj.members + index + 1, sizeof(cjson_member) * (value->u.obj.size - index));
-}   //类似erase array 顺序可优化
+}
 
 void cjson_clear_object(cjson_value *value)
 {
@@ -1011,7 +1003,7 @@ void cjson_clear_object(cjson_value *value)
     free(value->u.obj.members[i].key);
   }
   value->u.arr.size = 0;
-}   //类似erase array 顺序可优化
+}
 
 void cjson_shrink_object(cjson_value *value)
 {
@@ -1021,5 +1013,4 @@ void cjson_shrink_object(cjson_value *value)
 
   value->u.obj.capacity = value->u.obj.size;
   value->u.obj.members = realloc(value->u.obj.members, sizeof(cjson_member) * value->u.obj.size);
-
 }
